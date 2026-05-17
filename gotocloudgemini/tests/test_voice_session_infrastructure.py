@@ -136,7 +136,7 @@ class TestCrearSesionArchivo:
         # Verify thread was created
         threads = self.mock_supabase.get_rows("conversation_threads")
         assert len(threads) == 1
-        assert threads[0]["metadata"]["cliente_id"] == 1
+        assert str(threads[0]["metadata"]["cliente_id"]) == "1"  # Stored as string
 
         # Verify session was created
         sessions = self.mock_supabase.get_rows("conversation_sessions")

@@ -52,7 +52,7 @@ def crear_sesion_archivo(cliente_id: str | int, session_data: dict) -> dict | No
             "id": thread_id,
             "contact_id": str(uuid.uuid4()),  # Placeholder UUID; real contact linking in future PR
             "topic": f"Voice call - cliente {cliente_id}",
-            "metadata": {"cliente_id": int(cliente_id)},
+            "metadata": {"cliente_id": str(cliente_id)},
             "status": "active",
         }
         thread_result = supabase.table("conversation_threads").insert(thread_data).execute()
@@ -69,7 +69,7 @@ def crear_sesion_archivo(cliente_id: str | int, session_data: dict) -> dict | No
             "status": "active",
             "started_at": session_data.get("started_at", now_iso),
             "metadata": {
-                "cliente_id": int(cliente_id),
+                "cliente_id": str(cliente_id),
                 "resumen": session_data.get("resumen", ""),
                 "intention": session_data.get("intention", ""),
                 "score_lead": session_data.get("score_lead"),
