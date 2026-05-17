@@ -739,12 +739,26 @@ async def _ensure_chat_session_db(session: TextAgentSession) -> None:
 @app.post("/twiml")
 async def twiml(request: Request):
     logger.info(f"[TWIML] Request from {request.client} method={request.method} headers={dict(request.headers)}")
+
+    from_number = ""
+    try:
+        if request.method == "POST":
+            form = await request.form()
+            from_number = form.get("From", "")
+        else:
+            from_number = request.query_params.get("From", "")
+    except Exception:
+        pass
+
     try:
         stream_url = _stream_url()
+        if from_number:
+            import urllib.parse
+            stream_url += f"?from={urllib.parse.quote(from_number)}"
     except ValueError as exc:
         logger.error(f"[TWIML] Error: {exc}")
         return Response(content=str(exc), status_code=500, media_type="text/plain")
-    logger.info(f"[TWIML] Responding with stream_url={stream_url}")
+    logger.info(f"[TWIML] Responding with stream_url={stream_url} from={from_number}")
     return Response(
         content=TWIML_TEMPLATE.format(stream_url=stream_url),
         media_type="application/xml",
@@ -756,6 +770,9 @@ async def twilio_stream(websocket: WebSocket):
     logger.info(f"[WS] WebSocket connection attempt from {websocket.client}")
     await websocket.accept()
     logger.info("[WS] WebSocket accepted — Twilio connected")
+
+    caller_number = websocket.query_params.get("from", "")
+    logger.info(f"[WS] Caller number: {caller_number}")
 
     gemini = GeminiLiveClient()
     logger.info("[WS] Connecting to Gemini Live...")
@@ -891,6 +908,20 @@ async def twilio_stream(websocket: WebSocket):
         await gemini.close()
         logger.info("Gemini session closed")
 
+        # Follow-up WhatsApp post-llamada
+        if caller_number:
+            try:
+                from .whatsapp_handler import send_whatsapp_message
+                follow_up = (
+                    "¡Hola! Soy Camila de GoToCloud. "
+                    "Gracias por contactarnos. Si tenés alguna otra consulta, "
+                    "podés escribirme por aquí o llamarnos cuando lo necesites. "
+                    "¡Que tengas un excelente día!"
+                )
+                await send_whatsapp_message(caller_number, follow_up)
+            except Exception as exc:
+                logger.warning(f"Follow-up WhatsApp failed: {exc}")
+
 
 # ─────────────────────────────────────────────────────────────
 # WEB CLIENT — WebSocket para frontend web (sin Twilio)
@@ -1005,3 +1036,53 @@ async def web_stream(websocket: WebSocket):
         await gemini.close()
         await _ws_send_json(websocket, {"type": "status", "value": "ended"})
         logger.info("[WEB] Sesión cerrada")
+
+
+# ─────────────────────────────────────────────────────────────
+# WHATSAPP — Webhook de Twilio para mensajes entrantes
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/webhook/whatsapp")
+async def webhook_whatsapp(request: Request):
+    """Recibe mensajes de WhatsApp vía Twilio webhook y responde con Camila."""
+    try:
+        form = await request.form()
+        from_raw = form.get("From", "")
+        body = form.get("Body", "")
+    except Exception as exc:
+        logger.error(f"WhatsApp webhook parse error: {exc}")
+        return Response(content="Error", status_code=400, media_type="text/plain")
+
+    # Twilio envía From como whatsapp:+57317...
+    from_number = (
+        from_raw.replace("whatsapp:", "")
+        if from_raw.startswith("whatsapp:")
+        else from_raw
+    )
+
+    if not from_number or not body:
+        logger.warning(
+            f"WhatsApp webhook missing fields: from={from_number}, body={body}"
+        )
+        return Response(content="OK", status_code=200, media_type="text/plain")
+
+    logger.info(f"[WhatsApp] Message from {from_number}: {body[:50]}...")
+
+    try:
+        from .whatsapp_handler import handle_whatsapp_message
+
+        reply = await handle_whatsapp_message(from_number, body)
+    except Exception as exc:
+        logger.error(f"WhatsApp handler error: {exc}")
+        reply = (
+            "Lo siento, ocurrió un error. "
+            "Por favor intentá de nuevo más tarde."
+        )
+
+    # Responder a Twilio con TwiML <Message> para que envíe la respuesta
+    twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>{reply}</Message>
+</Response>"""
+
+    return Response(content=twiml_response, media_type="application/xml")

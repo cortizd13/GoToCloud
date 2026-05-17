@@ -1,7 +1,4 @@
-"""backend.conversion.tools — Stub implementations for all 6 conversion tools.
-
-All tools are Phase 1 stubs with TODO markers. They return placeholder
-responses that match the expected contract from the design document.
+"""backend.conversion.tools — Conversion tool implementations.
 
 Tools:
 - agendar_cita: Schedule appointment via Calendly
@@ -16,6 +13,18 @@ from __future__ import annotations
 
 from typing import Any
 
+# Import compatibility: works with sys.path (standalone) and package-relative (main.py)
+try:
+    from backend.supabase_client import supabase
+except ImportError:
+    try:
+        from supabase_client import supabase
+    except ImportError:
+        supabase = None
+
+from backend.conversion.scheduling import CalendlyIntegration
+from backend.conversion.alerts import LeadAlertDispatcher
+
 
 # ── Tool: agendar_cita ───────────────────────────────────────────────────────
 
@@ -27,9 +36,8 @@ def agendar_cita(
 ) -> dict[str, Any]:
     """Agenda una cita con un asesor de GoToCloud.
 
-    TODO: Integrate with Calendly API for real scheduling.
-    TODO: Persist appointment to agent_citas table in Supabase.
-    TODO: Handle Calendly availability conflicts.
+    Uses CalendlyIntegration to generate a scheduling link and persist
+    the appointment to the agent_citas table.
 
     Args:
         lead_id: ID del lead en Supabase.
@@ -39,14 +47,12 @@ def agendar_cita(
     Returns:
         Dict with cita_creada, calendly_link, estado.
     """
-    # TODO: Replace stub with real Calendly integration
-    return {
-        "cita_creada": False,
-        "calendly_link": "https://calendly.com/gotocloud/asesoria",
-        "estado": "pendiente",
-        "error": "calendly_no_disponible",
-        "mensaje": "Integración con Calendly pendiente de configurar.",
-    }
+    calendly = CalendlyIntegration()
+    return calendly.create_event(
+        lead_id=lead_id,
+        service=servicio_interes,
+        preferences=preferencias,
+    )
 
 
 # ── Tool: calificar_necesidad ────────────────────────────────────────────────
@@ -57,29 +63,55 @@ def calificar_necesidad(
     presupuesto_estimado: str | None = None,
     timeline: str | None = None,
     urgencia: str | None = None,
+    decision_maker: bool | None = None,
 ) -> dict[str, Any]:
     """Captura presupuesto estimado, timeline de decisión y urgencia del lead.
 
-    TODO: Persist qualification data to conversation_threads / sesiones.
-    TODO: Trigger auto-scoring based on captured data.
+    Persists qualification data to conversation_threads table in Supabase.
 
     Args:
-        lead_id: ID del lead en Supabase.
+        lead_id: ID del lead (conversation_threads UUID).
         presupuesto_estimado: Rango de presupuesto.
         timeline: Timeline de decisión.
         urgencia: Nivel de urgencia (alta, media, baja).
+        decision_maker: Whether the lead is a decision maker.
 
     Returns:
         Dict with calificado status and captured fields.
     """
-    # TODO: Replace stub with real Supabase persistence
+    calificado = False
+
+    if supabase is not None:
+        try:
+            update_data: dict[str, Any] = {}
+            if presupuesto_estimado is not None:
+                update_data["presupuesto_estimado"] = presupuesto_estimado
+            if timeline is not None:
+                update_data["timeline"] = timeline
+            if decision_maker is not None:
+                update_data["decision_maker"] = decision_maker
+
+            if update_data:
+                result = supabase.table("conversation_threads").update(update_data).eq("id", lead_id).execute()
+                if result.data:
+                    calificado = True
+                    print(f"[calificar_necesidad] Lead {lead_id} qualified: {update_data}")
+            else:
+                # No data to update, but still mark as calificado
+                calificado = True
+        except Exception as ex:
+            print(f"[calificar_necesidad] Error saving qualification: {ex}")
+    else:
+        print(f"[calificar_necesidad] Supabase not available — qualification logged only")
+        calificado = True  # Accept the data even without DB
+
     return {
-        "calificado": False,
+        "calificado": calificado,
         "lead_id": lead_id,
         "presupuesto_estimado": presupuesto_estimado,
         "timeline": timeline,
         "urgencia": urgencia,
-        "mensaje": "Captura de calificación pendiente de implementar.",
+        "decision_maker": decision_maker,
     }
 
 
@@ -123,9 +155,8 @@ def notificar_lead_caliente(
 ) -> dict[str, Any]:
     """Alerta a vendedor sobre lead con alta intención de compra.
 
-    TODO: Send webhook POST to LEAD_ALERT_WEBHOOK_URL.
-    TODO: Log alert to lead_alerts_log table.
-    TODO: Implement retry logic with exponential backoff.
+    Uses LeadAlertDispatcher to send webhook POST with retry logic
+    and logs to lead_alerts_log table.
 
     Args:
         lead_id: ID del lead en Supabase.
@@ -136,13 +167,31 @@ def notificar_lead_caliente(
     Returns:
         Dict with alerta_enviada status.
     """
-    # TODO: Replace stub with real webhook dispatch
+    dispatcher = LeadAlertDispatcher()
+
+    # Build the alert payload
+    payload = dispatcher._build_payload(
+        lead_id=lead_id,
+        score=score_lead,
+        lead_data={"lead_id": lead_id, "canal": canal, "intencion": intencion},
+        session_data={"channel": canal},
+        qualification={"score_lead": score_lead, "intencion": intencion},
+    )
+
+    result = dispatcher.send_alert(
+        lead_id=lead_id,
+        score=score_lead,
+        payload=payload,
+        intention=intencion,
+    )
+
     return {
-        "alerta_enviada": False,
+        "alerta_enviada": result.get("status") == "enviada",
         "lead_id": lead_id,
         "score_lead": score_lead,
         "canal": canal,
-        "mensaje": "Webhook de alerta pendiente de configurar.",
+        "status": result.get("status", "unknown"),
+        "mensaje": result.get("mensaje", ""),
     }
 
 

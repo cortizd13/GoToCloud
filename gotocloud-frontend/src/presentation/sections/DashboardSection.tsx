@@ -522,14 +522,24 @@ function ClientsSection() {
       .finally(() => setLoading(false));
   }, []);
 
+  const intentionOrder: Record<ClientRecord["intention"], number> = {
+    caliente: 0,
+    calida: 1,
+    fria: 2,
+  };
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return clients;
-    const q = search.toLowerCase();
-    return clients.filter(
-      (c) =>
-        c.nombre.toLowerCase().includes(q) ||
-        c.empresa.toLowerCase().includes(q) ||
-        c.telefono.includes(q),
+    const q = search.trim().toLowerCase();
+    const list = q
+      ? clients.filter(
+          (c) =>
+            c.nombre.toLowerCase().includes(q) ||
+            c.empresa.toLowerCase().includes(q) ||
+            c.telefono.includes(q),
+        )
+      : [...clients];
+    return list.sort(
+      (a, b) => intentionOrder[a.intention] - intentionOrder[b.intention],
     );
   }, [clients, search]);
 
