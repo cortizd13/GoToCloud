@@ -279,14 +279,14 @@ async def dashboard_summary():
         yesterday_end,
     )
     calls_today = _safe_query(
-        "llamadas",
+        "sesiones",
         "id,started_at,ended_at,duracion_segundos,intention,score_lead,servicios_interes,recomendaciones,created_at",
         "started_at",
         today_start,
         today_end,
     )
     calls_yesterday = _safe_query(
-        "llamadas",
+        "sesiones",
         "id,started_at,duracion_segundos,created_at",
         "started_at",
         yesterday_start,
@@ -357,8 +357,9 @@ async def dashboard_summary():
     channel_counts = Counter(
         session.get("channel_type") or "desconocido" for session in sessions_today
     )
-    if calls_today and not channel_counts:
-        channel_counts["voice"] = len(calls_today)
+    # Legacy sesiones are all voice calls during transition period
+    if calls_today:
+        channel_counts["voice"] += len(calls_today)
 
     reason_counts = Counter()
     for call in calls_today:
