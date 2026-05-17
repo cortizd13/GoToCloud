@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MdClose, MdSend } from "react-icons/md";
 import { sendChatbotMessage } from "../../infrastructure/api/chatbot.api";
+import CamilaImage from '../../shared/img/camila.jpeg';
 import "./ChatbotWidget.css";
 
 type ChatMessage = {
@@ -85,7 +86,7 @@ function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
       <header className="chatbot-widget__header">
         <div className="chatbot-widget__agent">
           <span className="chatbot-widget__avatar">
-            <img src="" alt="" />
+            <img className="chatbot-widget__img" src={CamilaImage} alt="Icono Camila Bot" />
           </span>
           <div>
             <strong>Camila</strong>

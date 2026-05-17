@@ -1,9 +1,10 @@
 // src/presentation/layout/VoiceCallWidget.tsx
 import { useEffect, useRef, useState } from 'react';
-import { MdOutlineSmartToy, MdPhoneDisabled } from 'react-icons/md';
+import {  MdPhoneDisabled } from 'react-icons/md';
 import { VoiceSession } from '../../infrastructure/api/voice.api';
 import type { VoiceEvent } from '../../infrastructure/api/voice.api';
 import type { CallStatus, TranscriptEntry } from '../../domain/voice';
+import CamilaImage from '../../shared/img/camila.jpeg';
 import './VoiceCallWidget.css';
 
 type Props = { onClose: () => void };
@@ -102,7 +103,7 @@ export default function VoiceCallWidget({ onClose }: Props) {
       <header className="chatbot-widget__header">
         <div className="chatbot-widget__agent">
           <span className="chatbot-widget__avatar">
-            <MdOutlineSmartToy size={22} />
+            <img className="chatbot-widget__img" src={CamilaImage} alt="Icono Camila Bot" />
           </span>
           <div>
             <strong>Camila</strong>
