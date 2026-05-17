@@ -24,6 +24,8 @@ except ImportError:
 
 from backend.conversion.scheduling import CalendlyIntegration
 from backend.conversion.alerts import LeadAlertDispatcher
+from backend.conversion.email import EmailSender
+from backend.conversion.crm import get_crm_provider, CRMProvider
 
 
 # ── Tool: agendar_cita ───────────────────────────────────────────────────────
@@ -124,23 +126,70 @@ def enviar_email_seguimiento(
 ) -> dict[str, Any]:
     """Envía email de follow-up al lead con resumen y próximos pasos.
 
-    TODO: Integrate with SendGrid API for real email delivery.
-    TODO: Load template from email_templates.py and interpolate variables.
-    TODO: Log email status to email_logs table.
+    Looks up the lead's email from conversation_threads metadata,
+    renders the appropriate template, and sends via SendGrid/Resend.
+    Logs the result to email_logs table.
 
     Args:
-        lead_id: ID del lead en Supabase.
+        lead_id: ID del lead en Supabase (conversation_threads UUID).
         template_id: Template to use (follow_up_caliente, follow_up_tibio, recordatorio_cita).
 
     Returns:
-        Dict with email_sent status.
+        Dict with email_enviado status and details.
     """
-    # TODO: Replace stub with real SendGrid integration
+    if not lead_id:
+        return {"error": "lead_id es requerido para enviar_email_seguimiento"}
+
+    # Look up lead data from Supabase
+    lead_email = None
+    lead_nombre = None
+    lead_servicios = []
+
+    if supabase is not None:
+        try:
+            result = supabase.table("conversation_threads").select("id, metadata").eq("id", lead_id).execute()
+            if result.data and len(result.data) > 0:
+                metadata = result.data[0].get("metadata", {})
+                if isinstance(metadata, dict):
+                    lead_email = metadata.get("email")
+                    lead_nombre = metadata.get("nombre")
+                    lead_servicios = metadata.get("servicios_interes", [])
+        except Exception as ex:
+            print(f"[enviar_email_seguimiento] Error looking up lead: {ex}")
+
+    if not lead_email:
+        return {
+            "email_enviado": False,
+            "lead_id": lead_id,
+            "template_id": template_id,
+            "razon": "email_no_disponible",
+            "mensaje": "No se encontró email para este lead.",
+        }
+
+    # Build context for template interpolation
+    context = {
+        "nombre_cliente": lead_nombre or "cliente",
+        "servicio_interes": ", ".join(lead_servicios) if lead_servicios else "nuestros servicios",
+        "proximo_paso": "Un asesor de GoToCloud se comunicará contigo pronto.",
+        "link_cita": "https://calendly.com/gotocloud/asesoria",
+    }
+
+    # Send email
+    sender = EmailSender()
+    send_result = sender.send(
+        to_email=lead_email,
+        subject=f"Gracias por contactarte con GoToCloud - Próximos pasos",
+        template_id=template_id,
+        context=context,
+    )
+
     return {
-        "email_enviado": False,
+        "email_enviado": send_result.get("success", False),
         "lead_id": lead_id,
         "template_id": template_id,
-        "mensaje": "Integración con SendGrid pendiente de configurar.",
+        "destinatario": lead_email,
+        "razon": send_result.get("razon") if not send_result.get("success") else None,
+        "mensaje": send_result.get("mensaje", "Email enviado correctamente" if send_result.get("success") else ""),
     }
 
 
@@ -199,55 +248,123 @@ def notificar_lead_caliente(
 
 
 def consultar_crm(
-    lead_id: str,
+    lead_id: str = "",
+    identificador: str = "",
+    tipo: str = "email",
     crm_tipo: str = "hubspot",
 ) -> dict[str, Any]:
     """Consulta estado de lead en CRM externo (HubSpot).
 
-    TODO: Integrate with HubSpot API via CRMProvider interface.
-    TODO: Map Supabase fields to CRM fields.
+    Searches for an existing contact in the CRM by email or cedula.
+    Logs the lookup attempt to crm_sync_log table.
 
     Args:
-        lead_id: ID del lead en Supabase.
+        lead_id: ID del lead en Supabase (optional, for logging).
+        identificador: Email or cedula to search for.
+        tipo: Type of identifier ('email', 'cedula').
         crm_tipo: CRM type (hubspot).
 
     Returns:
         Dict with CRM lookup results.
     """
-    # TODO: Replace stub with real CRMProvider.get_lead()
-    return {
-        "success": False,
-        "cliente_encontrado": False,
-        "lead_id": lead_id,
-        "crm_tipo": crm_tipo,
-        "mensaje": "Integración con CRM pendiente de configurar.",
-    }
+    if not identificador and not lead_id:
+        return {"error": "identificador o lead_id es requerido para consultar_crm"}
+
+    try:
+        provider = get_crm_provider(crm_tipo)
+    except ValueError as ex:
+        return {"error": str(ex)}
+
+    # If only lead_id provided, look up email from Supabase first
+    search_id = identificador
+    search_type = tipo
+
+    if not search_id and lead_id and supabase is not None:
+        try:
+            result = supabase.table("conversation_threads").select("id, metadata").eq("id", lead_id).execute()
+            if result.data and len(result.data) > 0:
+                metadata = result.data[0].get("metadata", {})
+                if isinstance(metadata, dict):
+                    search_id = metadata.get("email", "")
+                    search_type = "email"
+        except Exception as ex:
+            print(f"[consultar_crm] Error looking up lead: {ex}")
+
+    if not search_id:
+        return {
+            "success": False,
+            "cliente_encontrado": False,
+            "razon": "identificador_no_disponible",
+        }
+
+    return provider.get_lead(search_id, identifier_type=search_type)
 
 
 # ── Tool: crear_lead_crm ─────────────────────────────────────────────────────
 
 
 def crear_lead_crm(
-    lead_id: str,
+    lead_id: str = "",
     crm_tipo: str = "hubspot",
+    nombre: str = "",
+    email: str = "",
+    telefono: str = "",
+    empresa: str = "",
+    servicios_interes: list[str] | None = None,
+    presupuesto: str = "",
+    timeline: str = "",
+    score_lead: int = 0,
+    intencion: str = "",
 ) -> dict[str, Any]:
     """Sincroniza lead con CRM externo.
 
-    TODO: Integrate with HubSpot API via CRMProvider interface.
-    TODO: Map Supabase fields to CRM fields.
-    TODO: Log sync status to crm_sync_log table.
+    Creates a new lead in the CRM with the provided data.
+    If only lead_id is provided, looks up data from Supabase first.
+    Logs the sync attempt to crm_sync_log table.
 
     Args:
         lead_id: ID del lead en Supabase.
         crm_tipo: CRM type (hubspot).
+        nombre: Lead's full name.
+        email: Lead's email.
+        telefono: Lead's phone.
+        empresa: Lead's company.
+        servicios_interes: Services of interest.
+        presupuesto: Budget range.
+        timeline: Decision timeline.
+        score_lead: Lead score 0-100.
+        intencion: Lead intention classification.
 
     Returns:
         Dict with CRM creation results.
     """
-    # TODO: Replace stub with real CRMProvider.create_lead()
-    return {
-        "success": False,
-        "lead_id": lead_id,
-        "crm_tipo": crm_tipo,
-        "mensaje": "Integración con CRM pendiente de configurar.",
+    if not lead_id and not (nombre and email):
+        return {"error": "lead_id o (nombre + email) es requerido para crear_lead_crm"}
+
+    # If only lead_id provided, look up data from Supabase
+    lead_data = {
+        "nombre": nombre,
+        "email": email,
+        "telefono": telefono,
+        "empresa": empresa,
     }
+
+    if lead_id and supabase is not None and not nombre:
+        try:
+            result = supabase.table("conversation_threads").select("id, metadata").eq("id", lead_id).execute()
+            if result.data and len(result.data) > 0:
+                metadata = result.data[0].get("metadata", {})
+                if isinstance(metadata, dict):
+                    lead_data["nombre"] = metadata.get("nombre", nombre)
+                    lead_data["email"] = metadata.get("email", email)
+                    lead_data["telefono"] = metadata.get("telefono", telefono)
+                    lead_data["empresa"] = metadata.get("empresa", empresa)
+        except Exception as ex:
+            print(f"[crear_lead_crm] Error looking up lead: {ex}")
+
+    try:
+        provider = get_crm_provider(crm_tipo)
+    except ValueError as ex:
+        return {"error": str(ex)}
+
+    return provider.create_lead(lead_data)

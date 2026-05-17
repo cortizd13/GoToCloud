@@ -615,6 +615,87 @@ GOTOCLOUD_TOOLS: list[dict[str, Any]] = [
             "required": ["lead_id", "score_lead"],
         },
     },
+    {
+        "name": "enviar_email_seguimiento",
+        "description": (
+            "Envía email de seguimiento al lead con resumen de la conversación y próximos pasos. "
+            "Se usa al final de la llamada cuando el lead proporcionó email válido. "
+            "El email incluye información de los servicios de interés y datos de contacto del asesor."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "lead_id": {
+                    "type": "string",
+                    "description": "ID del lead en Supabase (conversation_threads UUID).",
+                },
+                "template_id": {
+                    "type": "string",
+                    "enum": ["follow_up_caliente", "follow_up_tibio", "recordatorio_cita"],
+                    "description": "Template de email a usar según la intención del lead.",
+                },
+            },
+            "required": ["lead_id", "template_id"],
+        },
+    },
+    {
+        "name": "consultar_crm",
+        "description": (
+            "Busca un cliente existente en el CRM (HubSpot) por email o cédula. "
+            "Úsala al inicio de la llamada para personalizar el saludo si el cliente ya existe. "
+            "Si lo encuentra, retorna sus datos del CRM. Si no, retorna cliente_encontrado=false."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "identificador": {
+                    "type": "string",
+                    "description": "Email o cédula del cliente a buscar.",
+                },
+                "tipo": {
+                    "type": "string",
+                    "enum": ["email", "cedula"],
+                    "description": "Tipo de identificador.",
+                },
+            },
+            "required": ["identificador", "tipo"],
+        },
+    },
+    {
+        "name": "crear_lead_crm",
+        "description": (
+            "Crea un nuevo lead en el CRM (HubSpot) con los datos del cliente. "
+            "Se usa al final de la llamada cuando el lead es nuevo y tiene datos completos. "
+            "Sincroniza nombre, email, teléfono, empresa y servicios de interés."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "nombre": {
+                    "type": "string",
+                    "description": "Nombre completo del lead.",
+                },
+                "email": {
+                    "type": "string",
+                    "description": "Email del lead.",
+                },
+                "telefono": {
+                    "type": "string",
+                    "description": "Teléfono del lead.",
+                },
+                "empresa": {
+                    "type": "string",
+                    "description": "Empresa del lead.",
+                },
+                "servicios_interes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Servicios de interés.",
+                },
+            },
+            "required": ["nombre", "email"],
+        },
+    },
 ]
 
 
@@ -1005,6 +1086,46 @@ def ejecutar_tool(nombre: str, args: dict[str, Any] | None = None) -> dict[str, 
             intencion=args.get("intencion"),
         )
 
+    elif nombre == "enviar_email_seguimiento":
+        from backend.conversion.tools import enviar_email_seguimiento as _enviar_email_seguimiento
+
+        lead_id = args.get("lead_id", "").strip()
+        if not lead_id:
+            return {"error": "lead_id es requerido para enviar_email_seguimiento"}
+        return _enviar_email_seguimiento(
+            lead_id=lead_id,
+            template_id=args.get("template_id", "follow_up_caliente"),
+        )
+
+    elif nombre == "consultar_crm":
+        from backend.conversion.tools import consultar_crm as _consultar_crm
+
+        identificador = args.get("identificador", "").strip()
+        tipo = args.get("tipo", "email")
+        if not identificador:
+            return {"error": "identificador es requerido para consultar_crm"}
+        return _consultar_crm(
+            identificador=identificador,
+            tipo=tipo,
+            crm_tipo=args.get("crm_tipo", "hubspot"),
+        )
+
+    elif nombre == "crear_lead_crm":
+        from backend.conversion.tools import crear_lead_crm as _crear_lead_crm
+
+        nombre_crm = args.get("nombre", "").strip()
+        email_crm = args.get("email", "").strip()
+        if not nombre_crm or not email_crm:
+            return {"error": "nombre y email son requeridos para crear_lead_crm"}
+        return _crear_lead_crm(
+            nombre=nombre_crm,
+            email=email_crm,
+            telefono=args.get("telefono", ""),
+            empresa=args.get("empresa", ""),
+            servicios_interes=args.get("servicios_interes", []),
+            crm_tipo=args.get("crm_tipo", "hubspot"),
+        )
+
     else:
         return {"error": f"Tool '{nombre}' no reconocida."}
 
@@ -1062,6 +1183,30 @@ NUNCA repitas en voz números de cédula, números de teléfono completos ni nin
 4. Usar tool adecuada para dar información precisa
 5. Ofrecer hablar con asesor si hay interés
 
+## GUÍA DE CONVERSIÓN — FASE POST-REGISTRO
+Después de registrar los datos básicos con `registrar_datos_cliente`, SIEMPRE pregunta sobre presupuesto estimado y timeline del proyecto usando la herramienta `calificar_necesidad`. Esto no es opcional: es el paso que transforma una consulta informativa en una oportunidad real de negocio.
+
+Pregunta de forma natural, sin sonar como un interrogatorio:
+- "¿Tienen algún presupuesto estimado para este proyecto?"
+- "¿En qué timeline les gustaría avanzar?"
+- "¿Qué tan urgente es para ustedes?"
+
+Captura estos datos con `calificar_necesidad` usando el lead_id (cliente_id o thread_id) que obtuviste del registro.
+
+## DETECCIÓN DE INTENCIÓN DE COMPRA — CUÁNDO EL LEAD ESTÁ CALIENTE
+Cuando detectes intención de compra (el lead pregunta precios, tiempos, compara servicios, muestra urgencia), ofrece agendar una cita con un asesor especializado usando `agendar_cita`.
+
+Señales de lead caliente:
+- Pregunta por precios o costos específicos
+- Quiere avanzar rápido o tiene timeline inmediato
+- Menciona que tiene presupuesto disponible
+- Compara servicios de GoToCloud con la competencia
+- Dice frases como "necesitamos esto ya", "cuánto cuesta", "cómo empezamos"
+
+Cuando el lead muestre estas señales Y su score_lead sea mayor a 70 o su intención sea "caliente", dispara automáticamente `notificar_lead_caliente` para alertar al equipo de ventas.
+
+Al ofrecer la cita, sé natural: "Si te parece, puedo agendarte una reunión con uno de nuestros asesores especializados para que te dé una propuesta personalizada. ¿Te gustaría?"
+
 ## CIERRE DE LLAMADA
 Al final de la conversación, cuando el cliente indique que se va, agradezca o no tenga más preguntas:
 1. Pregunta si hay algo más en lo que puedas ayudar
@@ -1071,7 +1216,10 @@ Al final de la conversación, cuando el cliente indique que se va, agradezca o n
    - Score: 0-100 según probabilidad de compra
    - Servicios de interés: solo los que mencionó explícitamente
    - Recomendaciones: qué debería hacer el vendedor en el seguimiento
-3. Después de recibir la confirmación de la tool, despidete cordialmente
+3. Después de recibir la confirmación de la tool:
+   - Si se agendó cita durante la conversación, confirma la fecha y hora al lead
+   - Si el lead mostró interés pero no agendó cita, indícale que recibirá un email de seguimiento con la información que conversaron
+4. Despidete cordialmente
 """.strip()
 
 

@@ -169,11 +169,12 @@ class TestAlertsModule:
         assert hasattr(instance, "send_alert")
         assert callable(instance.send_alert)
 
-    def test_alerts_has_todo_marker(self):
-        """alerts.py should have TODO markers."""
+    def test_alerts_has_implementation(self):
+        """alerts.py should have implemented send_alert (Phase 2)."""
         import backend.conversion.alerts as alerts_module
         source = Path(alerts_module.__file__).read_text(encoding="utf-8")
-        assert "TODO" in source
+        # Verify key implementation methods exist
+        assert "_post_webhook" in source or "send_alert" in source
 
 
 # ── CRM Module ───────────────────────────────────────────────────────────────

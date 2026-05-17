@@ -281,6 +281,42 @@ CREATE INDEX IF NOT EXISTS idx_analytics_events_payload_gin ON public.analytics_
 CREATE INDEX IF NOT EXISTS idx_memory_embeddings_vector_ivfflat ON public.memory_embeddings USING ivfflat(embedding vector_cosine_ops) WITH (lists = 100);
 
 -- =============================================================
+--  Mejora Tasa de Conversión — Phase 2 Tables & Columns
+--  All IF NOT EXISTS for idempotent execution
+-- =============================================================
+
+-- Tabla para logging de emails de seguimiento
+CREATE TABLE IF NOT EXISTS public.email_logs (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lead_id         UUID REFERENCES public.conversation_threads(id) ON DELETE SET NULL,
+    destinatario    VARCHAR,
+    subject         VARCHAR,
+    status          VARCHAR CHECK (status IN ('enviado', 'bounced', 'spam', 'error')),
+    template_used   VARCHAR,
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+COMMENT ON TABLE public.email_logs IS 'Log de emails de seguimiento enviados por el agente Camila';
+
+-- Tabla para logging de sincronización con CRM externo
+CREATE TABLE IF NOT EXISTS public.crm_sync_log (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lead_id         UUID REFERENCES public.conversation_threads(id) ON DELETE SET NULL,
+    crm_lead_id     VARCHAR,
+    crm_type        VARCHAR,
+    operation       VARCHAR CHECK (operation IN ('create', 'update', 'lookup')),
+    status          VARCHAR CHECK (status IN ('exitosa', 'fallida', 'pendiente')),
+    error_message   TEXT,
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+COMMENT ON TABLE public.crm_sync_log IS 'Log de sincronizaciones con CRM externo (HubSpot, Salesforce, etc.)';
+
+-- Índices para Phase 2
+CREATE INDEX IF NOT EXISTS idx_email_logs_status ON public.email_logs(status);
+CREATE INDEX IF NOT EXISTS idx_crm_sync_log_status ON public.crm_sync_log(status);
+
+-- =============================================================
 --  Mejora Tasa de Conversión — Phase 1 Tables & Columns
 --  All IF NOT EXISTS for idempotent execution
 -- =============================================================
@@ -481,6 +517,20 @@ CREATE POLICY "anon_select_agent_citas" ON public.agent_citas FOR SELECT USING (
 CREATE POLICY "anon_insert_agent_citas" ON public.agent_citas FOR INSERT WITH CHECK (true);
 CREATE POLICY "anon_select_lead_alerts_log" ON public.lead_alerts_log FOR SELECT USING (true);
 CREATE POLICY "anon_insert_lead_alerts_log" ON public.lead_alerts_log FOR INSERT WITH CHECK (true);
+
+-- RLS policies for Phase 2 tables
+ALTER TABLE public.email_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.crm_sync_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "anon_select_email_logs" ON public.email_logs;
+DROP POLICY IF EXISTS "anon_insert_email_logs" ON public.email_logs;
+DROP POLICY IF EXISTS "anon_select_crm_sync_log" ON public.crm_sync_log;
+DROP POLICY IF EXISTS "anon_insert_crm_sync_log" ON public.crm_sync_log;
+
+CREATE POLICY "anon_select_email_logs" ON public.email_logs FOR SELECT USING (true);
+CREATE POLICY "anon_insert_email_logs" ON public.email_logs FOR INSERT WITH CHECK (true);
+CREATE POLICY "anon_select_crm_sync_log" ON public.crm_sync_log FOR SELECT USING (true);
+CREATE POLICY "anon_insert_crm_sync_log" ON public.crm_sync_log FOR INSERT WITH CHECK (true);
 
 -- =============================================================
 --  Seed data (INSERT con ON CONFLICT para ser idempotente)
