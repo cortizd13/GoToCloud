@@ -30,7 +30,7 @@ def safe_print(text: str) -> None:
     except UnicodeEncodeError:
         print(text.encode("utf-8", errors="replace").decode("utf-8", errors="replace"))
 
-API_KEY = os.getenv("OPENROUTER_API_KEY") or "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"
+API_KEY = os.getenv("OPENROUTER_API_KEY") or "sk-or-v1-PLACEHOLDER_REPLACE_WITH_REAL_KEY"
 MODEL = "baidu/cobuddy:free"
 BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 

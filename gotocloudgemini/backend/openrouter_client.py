@@ -26,7 +26,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 logger = logging.getLogger(__name__)
 
-API_KEY = os.getenv("OPENROUTER_API_KEY") or "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"
+API_KEY = os.getenv("OPENROUTER_API_KEY") or "sk-or-v1-PLACEHOLDER_REPLACE_WITH_REAL_KEY"
 MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-4-26b-a4b-it:free")
 BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 
