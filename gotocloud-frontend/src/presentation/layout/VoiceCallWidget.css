@@ -1,0 +1,120 @@
+/* src/presentation/layout/VoiceCallWidget.css */
+
+.voice-call-widget__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  overflow-y: auto;
+  background:
+    linear-gradient(180deg, rgba(247, 249, 252, 0.92), rgba(255, 255, 255, 0.94)),
+    var(--gtc-gray-50);
+}
+
+/* ── Status badge ──────────────────────────────────── */
+.voice-call-widget__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  align-self: center;
+  margin-top: auto;
+}
+
+.voice-call-widget__status--connecting {
+  color: var(--gtc-gray-400);
+  background: var(--gtc-gray-100);
+}
+
+.voice-call-widget__status--listening {
+  color: #16a34a;
+  background: #dcfce7;
+}
+
+.voice-call-widget__status--speaking {
+  color: var(--gtc-blue-500);
+  background: #dbeafe;
+}
+
+.voice-call-widget__status--ended {
+  color: var(--gtc-gray-500);
+  background: var(--gtc-gray-100);
+}
+
+.voice-call-widget__status--error {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+@keyframes voice-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+
+.voice-call-widget__status--listening,
+.voice-call-widget__status--speaking {
+  animation: voice-pulse 1.5s ease-in-out infinite;
+}
+
+/* ── Live badge (header) ───────────────────────────── */
+.voice-call-widget__live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.voice-call-widget__live-badge::before {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+
+/* ── Footer / Colgar ───────────────────────────────── */
+.voice-call-widget__footer {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  background: var(--gtc-white);
+}
+
+.voice-call-widget__hangup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-full);
+  color: #fff;
+  background: #dc2626;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  transition:
+    background var(--dur-base) var(--ease),
+    transform var(--dur-base) var(--ease);
+}
+
+.voice-call-widget__hangup:hover {
+  background: #b91c1c;
+  transform: scale(1.03);
+}
+
+.voice-call-widget__hangup:active {
+  transform: scale(0.98);
+}
