@@ -39,13 +39,51 @@ export type DashboardSourceSummary = {
   events: number;
 };
 
+export type DashboardLead = {
+  id: number;
+  nombre: string;
+  empresa: string;
+  telefono: string;
+  scoreLead: number;
+  intention: "fria" | "calida" | "caliente";
+  serviciosInteres: string[];
+  recomendaciones: string;
+  startedAt: string;
+};
+
 export type DashboardSummary = {
   generatedAt: string;
   range: "today";
   overview: DashboardOverviewMetric[];
   volumeByHour: DashboardHourlyPoint[];
+  hotLeads: DashboardLead[];
+  escalationCandidates: DashboardLead[];
   contactReasons: DashboardBreakdownItem[];
   channels: DashboardBreakdownItem[];
   recommendations: DashboardRecommendation[];
   source: DashboardSourceSummary;
+};
+
+export type ClientRecord = {
+  id: number;
+  nombre: string;
+  empresa: string;
+  telefono: string;
+  cedula: string;
+  totalSessions: number;
+  lastSessionAt: string | null;
+  avgScore: number;
+  intention: "fria" | "calida" | "caliente";
+};
+
+export type ClientSession = {
+  id: number;
+  startedAt: string | null;
+  endedAt: string | null;
+  duracionSegundos: number | null;
+  resumen: string;
+  intention: "fria" | "calida" | "caliente";
+  scoreLead: number;
+  serviciosInteres: string[];
+  recomendaciones: string;
 };

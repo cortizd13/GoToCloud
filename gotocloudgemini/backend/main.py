@@ -215,6 +215,21 @@ def _hour_label(hour: int) -> str:
     return f"{hour:02d}:00"
 
 
+def _format_lead(row: dict) -> dict:
+    cliente = row.get("clientes") or {}
+    return {
+        "id": row.get("id"),
+        "nombre": cliente.get("nombre") or "Desconocido",
+        "empresa": cliente.get("empresa") or "",
+        "telefono": cliente.get("telefono") or "",
+        "scoreLead": row.get("score_lead") or 0,
+        "intention": row.get("intention") or "fria",
+        "serviciosInteres": row.get("servicios_interes") or [],
+        "recomendaciones": row.get("recomendaciones") or "",
+        "startedAt": str(row.get("started_at") or ""),
+    }
+
+
 def _dashboard_recommendations(reason_counts: Counter, channel_counts: Counter,
                                avg_score: float | None, total_today: int) -> list[dict]:
     recommendations = []
@@ -437,11 +452,43 @@ async def dashboard_summary():
         },
     ]
 
+    # Hot leads and escalation candidates (all time, not just today)
+    leads_raw: list[dict] = []
+    try:
+        if supabase is not None:
+            result = (
+                supabase.table("sesiones")
+                .select(
+                    "id,score_lead,intention,servicios_interes,recomendaciones,started_at,"
+                    "clientes(nombre,empresa,telefono)"
+                )
+                .order("score_lead", desc=True)
+                .limit(60)
+                .execute()
+            )
+            leads_raw = result.data or []
+    except Exception as exc:
+        logger.warning("Hot leads query failed: %s", exc)
+
+    hot_leads = [
+        _format_lead(r)
+        for r in leads_raw
+        if (r.get("score_lead") or 0) >= 70 or r.get("intention") == "caliente"
+    ][:10]
+    hot_ids = {r.get("id") for r in leads_raw if (r.get("score_lead") or 0) >= 70 or r.get("intention") == "caliente"}
+    escalation_candidates = [
+        _format_lead(r)
+        for r in leads_raw
+        if r.get("recomendaciones") and r.get("id") not in hot_ids
+    ][:10]
+
     return {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "range": "today",
         "overview": overview,
         "volumeByHour": list(hourly.values()),
+        "hotLeads": hot_leads,
+        "escalationCandidates": escalation_candidates,
         "contactReasons": [
             {
                 "label": label,
@@ -470,6 +517,103 @@ async def dashboard_summary():
             "messages": len(messages_today),
             "events": len(events_today),
         },
+    }
+
+
+@app.get("/dashboard/clients")
+async def dashboard_clients():
+    """Lista de clientes con estadísticas agregadas de sus sesiones."""
+    if supabase is None:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=503, content={"detail": "Supabase no configurado"})
+
+    clients = _safe_query("clientes", "id,nombre,empresa,telefono,cedula,created_at")
+    sessions = _safe_query(
+        "sesiones",
+        "id,cliente_id,started_at,score_lead,intention,duracion_segundos",
+    )
+
+    sessions_by_client: dict[int, list[dict]] = defaultdict(list)
+    for session in sessions:
+        cid = session.get("cliente_id")
+        if cid is not None:
+            sessions_by_client[cid].append(session)
+
+    result = []
+    for client in clients:
+        cid = client["id"]
+        client_sessions = sessions_by_client.get(cid, [])
+        scores = [
+            s["score_lead"]
+            for s in client_sessions
+            if isinstance(s.get("score_lead"), (int, float))
+        ]
+        intentions = [s["intention"] for s in client_sessions if s.get("intention")]
+        last_session = max(
+            (s for s in client_sessions if s.get("started_at")),
+            key=lambda s: s["started_at"],
+            default=None,
+        )
+        intention_priority = {"caliente": 3, "calida": 2, "fria": 1}
+        best_intention = (
+            max(intentions, key=lambda i: intention_priority.get(i, 0))
+            if intentions
+            else "fria"
+        )
+        result.append({
+            "id": cid,
+            "nombre": client["nombre"],
+            "empresa": client.get("empresa") or "",
+            "telefono": client.get("telefono") or "",
+            "cedula": client.get("cedula") or "",
+            "totalSessions": len(client_sessions),
+            "lastSessionAt": last_session["started_at"] if last_session else None,
+            "avgScore": round(sum(scores) / len(scores)) if scores else 0,
+            "intention": best_intention,
+        })
+
+    result.sort(key=lambda c: c.get("lastSessionAt") or "", reverse=True)
+    return {"clients": result}
+
+
+@app.get("/dashboard/clients/{client_id}/sessions")
+async def dashboard_client_sessions(client_id: int):
+    """Historial completo de sesiones de un cliente."""
+    if supabase is None:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=503, content={"detail": "Supabase no configurado"})
+
+    try:
+        result = (
+            supabase.table("sesiones")
+            .select(
+                "id,started_at,ended_at,duracion_segundos,resumen,intention,"
+                "score_lead,servicios_interes,recomendaciones"
+            )
+            .eq("cliente_id", client_id)
+            .order("started_at", desc=True)
+            .execute()
+        )
+        sessions = result.data or []
+    except Exception as exc:
+        logger.warning("Client sessions query failed: %s", exc)
+        sessions = []
+
+    return {
+        "sessions": [
+            {
+                "id": s["id"],
+                "startedAt": s.get("started_at"),
+                "endedAt": s.get("ended_at"),
+                "duracionSegundos": s.get("duracion_segundos"),
+                "resumen": s.get("resumen") or "",
+                "intention": s.get("intention") or "fria",
+                "scoreLead": s.get("score_lead") or 0,
+                "serviciosInteres": s.get("servicios_interes") or [],
+                "recomendaciones": s.get("recomendaciones") or "",
+            }
+            for s in sessions
+        ]
     }
 
 
@@ -567,11 +711,13 @@ async def _ensure_chat_session_db(session: TextAgentSession) -> None:
         return
 
     try:
-        # Use anonymous external_id for webchat contacts
-        thread = await orchestrator.session_manager.find_or_create_thread(
-            contact_id="webchat-anonymous",
-            topic="Web chat session",
-        )
+        # Webchat sessions are anonymous — create a new thread without a contact_id
+        # (contact_id is nullable in conversation_threads; passing "webchat-anonymous"
+        # would violate the UUID FK constraint)
+        thread_result = supabase.table("conversation_threads").insert(
+            {"topic": "Web chat session", "status": "active"}
+        ).execute()
+        thread = thread_result.data[0]
 
         chat_session = await orchestrator.session_manager.create_session(
             thread["id"],
