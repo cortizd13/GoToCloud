@@ -63,3 +63,27 @@ export type DashboardSummary = {
   recommendations: DashboardRecommendation[];
   source: DashboardSourceSummary;
 };
+
+export type ClientRecord = {
+  id: number;
+  nombre: string;
+  empresa: string;
+  telefono: string;
+  cedula: string;
+  totalSessions: number;
+  lastSessionAt: string | null;
+  avgScore: number;
+  intention: "fria" | "calida" | "caliente";
+};
+
+export type ClientSession = {
+  id: number;
+  startedAt: string | null;
+  endedAt: string | null;
+  duracionSegundos: number | null;
+  resumen: string;
+  intention: "fria" | "calida" | "caliente";
+  scoreLead: number;
+  serviciosInteres: string[];
+  recomendaciones: string;
+};
