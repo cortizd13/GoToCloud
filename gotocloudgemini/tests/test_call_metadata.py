@@ -72,20 +72,139 @@ class _FakeQueryLlamadas(_FakeQuery):
         return MagicMock(data=[])
 
 
+class _FakeQuerySesiones(_FakeQuery):
+    """Query especializada para la tabla sesiones (renamed from llamadas)."""
+
+    def __init__(self, fake_supabase: _FakeSupabase):
+        super().__init__([])
+        self._fake = fake_supabase
+        self._method = None
+        self._insert_data = None
+
+    def select(self, *args, **kwargs):
+        self._method = "select"
+        return self
+
+    def insert(self, data):
+        self._method = "insert"
+        self._insert_data = data
+        return self
+
+    def eq(self, *args, **kwargs):
+        return self
+
+    def execute(self):
+        if self._method == "insert":
+            sid = self._fake._next_llamada_id  # reuse counter for legacy table
+            self._fake._next_llamada_id += 1
+            self._fake._sesiones[sid] = dict(self._insert_data)
+            return MagicMock(data=[{"id": sid}])
+        return MagicMock(data=[])
+
+
+class _FakeQueryConvThreads(_FakeQuery):
+    """Query para conversation_threads."""
+
+    def __init__(self, fake_supabase: _FakeSupabase):
+        super().__init__([])
+        self._fake = fake_supabase
+        self._method = None
+        self._insert_data = None
+
+    def select(self, *args, **kwargs):
+        self._method = "select"
+        return self
+
+    def insert(self, data):
+        self._method = "insert"
+        self._insert_data = data
+        return self
+
+    def eq(self, *args, **kwargs):
+        return self
+
+    def execute(self):
+        if self._method == "insert":
+            import uuid
+            tid = str(uuid.uuid4())
+            row = {"id": tid, **dict(self._insert_data)}
+            self._fake._conv_threads[tid] = row
+            return MagicMock(data=[row])
+        return MagicMock(data=[])
+
+
+class _FakeQueryConvSessions(_FakeQuery):
+    """Query para conversation_sessions."""
+
+    def __init__(self, fake_supabase: _FakeSupabase):
+        super().__init__([])
+        self._fake = fake_supabase
+        self._method = None
+        self._insert_data = None
+        self._update_data = None
+        self._eq_col = None
+        self._eq_val = None
+
+    def select(self, *args, **kwargs):
+        self._method = "select"
+        return self
+
+    def insert(self, data):
+        self._method = "insert"
+        self._insert_data = data
+        return self
+
+    def update(self, data):
+        self._method = "update"
+        self._update_data = data
+        return self
+
+    def eq(self, col, val):
+        self._eq_col = col
+        self._eq_val = val
+        return self
+
+    def execute(self):
+        import uuid
+        if self._method == "insert":
+            sid = str(uuid.uuid4())
+            row = {"id": sid, **dict(self._insert_data)}
+            self._fake._conv_sessions[sid] = row
+            return MagicMock(data=[row])
+        if self._method == "update":
+            for sid, row in self._fake._conv_sessions.items():
+                if row.get(self._eq_col) == self._eq_val:
+                    row.update(self._update_data)
+                    return MagicMock(data=[row])
+            return MagicMock(data=[])
+        return MagicMock(data=[])
+
+
 class _FakeSupabase:
     """Simula supabase con estado interno para upsert."""
 
     def __init__(self):
         self._clientes: dict[str, dict] = {}
         self._llamadas: dict[str, dict] = {}
+        self._sesiones: dict[str, dict] = {}  # renamed from llamadas
+        self._conv_threads: dict[str, dict] = {}
+        self._conv_sessions: dict[str, dict] = {}
         self._next_id = 1
         self._next_llamada_id = 1
+        self._next_thread_id = 1
+        self._next_session_id = 1
 
     def table(self, name: str) -> _FakeQuery:
         if name == "clientes":
             return _FakeQueryClientes(self)
         if name == "llamadas":
             return _FakeQueryLlamadas(self)
+        if name == "sesiones":
+            return _FakeQuerySesiones(self)
+        if name == "conversation_threads":
+            return _FakeQueryConvThreads(self)
+        if name == "conversation_sessions":
+            return _FakeQueryConvSessions(self)
         return _FakeQuery([])
 
 
@@ -174,6 +293,9 @@ def _reset():
     _cliente_actual.clear()
     _fake_supabase._clientes.clear()
     _fake_supabase._llamadas.clear()
+    _fake_supabase._sesiones.clear()
+    _fake_supabase._conv_threads.clear()
+    _fake_supabase._conv_sessions.clear()
     _fake_supabase._next_id = 1
     _fake_supabase._next_llamada_id = 1
 

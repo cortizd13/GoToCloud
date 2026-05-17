@@ -93,6 +93,10 @@ class TextAgentSession:
         self.session_id = str(uuid.uuid4())
         self.ended = False
 
+        # DB persistence tracking (set by /chat/message endpoint)
+        self.db_session_id: str | None = None
+        self.db_thread_id: str | None = None
+
         self._client = genai.Client(
             http_options={"api_version": "v1beta"},
             api_key=api_key,

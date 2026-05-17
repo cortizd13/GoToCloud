@@ -360,6 +360,74 @@ class AgentOrchestrator:
         self.session_manager = SessionManager(supabase)
         self.memory = MemoryCoordinator(supabase)
 
+    def create_voice_session(self, cedula: str, session_data: dict) -> dict | None:
+        """
+        Synchronous helper to create a voice session from sync context.
+
+        Wraps the async session creation flow so it can be called from
+        synchronous tool handlers (e.g., ejecutar_tool in gotocloud_voicebot_tool.py).
+
+        Args:
+            cedula: The client's ID number (used to look up or create contact).
+            session_data: Dict with session metadata (resumen, intention, etc.).
+
+        Returns:
+            Dict with {session_id, thread_id, contact_id} on success, None on failure.
+        """
+        import asyncio
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Already in async context — use create_task
+                task = asyncio.ensure_future(self._create_voice_session_async(cedula, session_data))
+                # This won't work from sync; fall back to direct sync approach
+                logger.warning("create_voice_session called from async context; use async method directly")
+                return None
+        except RuntimeError:
+            pass  # No event loop — create one
+
+        try:
+            return asyncio.run(self._create_voice_session_async(cedula, session_data))
+        except Exception as ex:
+            logger.error(f"create_voice_session failed: {ex}")
+            return None
+
+    async def _create_voice_session_async(self, cedula: str, session_data: dict) -> dict | None:
+        """
+        Async implementation of voice session creation.
+
+        Resolves contact by cedula, creates thread + session with channel_type='voice'.
+        """
+        # 1. Resolve contact by cedula
+        contact_id = await self._resolve_contact("voice", cedula)
+        if not contact_id:
+            logger.warning(f"Could not resolve contact for cedula={cedula}")
+            return None
+
+        # 2. Find or create thread
+        thread = await self.session_manager.find_or_create_thread(
+            contact_id,
+            topic=f"Voice call - cedula {cedula}"
+        )
+
+        # 3. Create session with channel_type='voice'
+        session = await self.session_manager.create_session(
+            thread["id"],
+            channel_type="voice"
+        )
+
+        logger.info(
+            f"Voice session created: session={session['id']}, "
+            f"thread={thread['id']}, contact={contact_id}"
+        )
+
+        return {
+            "session_id": session["id"],
+            "thread_id": thread["id"],
+            "contact_id": contact_id,
+        }
+
     async def handle_incoming(self, event_type: str, payload: dict) -> dict | None:
         """
         Main entry point for incoming events from any channel.

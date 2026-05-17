@@ -73,10 +73,10 @@ CREATE TABLE IF NOT EXISTS public.clientes (
     created_at  TIMESTAMPTZ DEFAULT now()
 );
 
-COMMENT ON TABLE public.clientes IS 'Registro de llamadas / clientes contactados';
+COMMENT ON TABLE public.clientes IS 'Registro de clientes contactados';
 
--- 6. Llamadas (metadata de cada llamada)
-CREATE TABLE IF NOT EXISTS public.llamadas (
+-- 6. Sesiones (metadata de cada llamada/chat — archivo legacy)
+CREATE TABLE IF NOT EXISTS public.sesiones (
     id                  SERIAL PRIMARY KEY,
     cliente_id          INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
     started_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS public.llamadas (
     created_at          TIMESTAMPTZ DEFAULT now()
 );
 
-COMMENT ON TABLE public.llamadas IS 'Metadata de llamadas: resumen, intención, score, servicios de interés';
+COMMENT ON TABLE public.sesiones IS 'Metadata de sesiones: resumen, intención, score, servicios de interés (archivo legacy)';
 
 -- =============================================================
 --  Multi-Channel AI Agent Platform — Phase 1: Database Foundation
@@ -250,6 +250,7 @@ CREATE INDEX IF NOT EXISTS idx_conversation_threads_status ON public.conversatio
 CREATE INDEX IF NOT EXISTS idx_conversation_sessions_thread_id ON public.conversation_sessions(thread_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_sessions_channel_identity_id ON public.conversation_sessions(channel_identity_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_sessions_status ON public.conversation_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_conversation_sessions_channel_started ON public.conversation_sessions(channel_type, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_session_id ON public.messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON public.messages(sender);
 CREATE INDEX IF NOT EXISTS idx_memory_summaries_thread_id ON public.memory_summaries(thread_id);
@@ -288,7 +289,7 @@ ALTER TABLE public.servicios       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.metricas        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.productos_saas  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clientes        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.llamadas         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sesiones         ENABLE ROW LEVEL SECURITY;
 
 -- Limpiar políticas existentes (para rerun seguro)
 DROP POLICY IF EXISTS "anon_select_empresa"         ON public.empresa;
@@ -297,8 +298,8 @@ DROP POLICY IF EXISTS "anon_select_metricas"        ON public.metricas;
 DROP POLICY IF EXISTS "anon_select_productos_saas"  ON public.productos_saas;
 DROP POLICY IF EXISTS "anon_insert_clientes"        ON public.clientes;
 DROP POLICY IF EXISTS "anon_select_clientes"        ON public.clientes;
-DROP POLICY IF EXISTS "anon_insert_llamadas"        ON public.llamadas;
-DROP POLICY IF EXISTS "anon_select_llamadas"        ON public.llamadas;
+DROP POLICY IF EXISTS "anon_select_sesiones"        ON public.sesiones;
+DROP POLICY IF EXISTS "anon_insert_sesiones"        ON public.sesiones;
 DROP POLICY IF EXISTS "anon_insert_empresa"         ON public.empresa;
 DROP POLICY IF EXISTS "anon_upsert_empresa"         ON public.empresa;
 DROP POLICY IF EXISTS "anon_insert_servicios"       ON public.servicios;
@@ -322,11 +323,11 @@ CREATE POLICY "anon_insert_clientes" ON public.clientes
 CREATE POLICY "anon_select_clientes" ON public.clientes
     FOR SELECT USING (true);
 
--- Políticas RLS para tabla llamadas
-CREATE POLICY "anon_insert_llamadas" ON public.llamadas
+-- Políticas RLS para tabla sesiones
+CREATE POLICY "anon_insert_sesiones" ON public.sesiones
     FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "anon_select_llamadas" ON public.llamadas
+CREATE POLICY "anon_select_sesiones" ON public.sesiones
     FOR SELECT USING (true);
 
 -- Permitir insert/upsert anónimo para seed de datos
@@ -552,6 +553,8 @@ UNION ALL
 SELECT 'metricas', COUNT(*) FROM public.metricas
 UNION ALL
 SELECT 'productos_saas', COUNT(*) FROM public.productos_saas
+UNION ALL
+SELECT 'sesiones', COUNT(*) FROM public.sesiones
 UNION ALL
 SELECT 'clientes', COUNT(*) FROM public.clientes
 UNION ALL

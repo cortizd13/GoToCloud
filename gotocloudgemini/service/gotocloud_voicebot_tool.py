@@ -6,6 +6,7 @@
 from __future__ import annotations
 import json
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,71 @@ except ImportError:
     except ImportError:
         supabase = None
         is_connected = lambda: False
+
+
+def crear_sesion_archivo(cliente_id: str | int, session_data: dict) -> dict | None:
+    """
+    Insert a voice session into conversation_threads + conversation_sessions.
+
+    Creates a thread with cliente_id stored in metadata (bridge to legacy clientes table),
+    then creates a session with channel_type='voice' linked to that thread.
+
+    Args:
+        cliente_id: The integer ID from the clientes table.
+        session_data: Dict with optional keys: resumen, intention, score_lead,
+                      servicios_interes, recomendaciones, started_at.
+
+    Returns:
+        Dict with {session_id, thread_id} on success, None on failure.
+    """
+    if supabase is None:
+        print("[crear_sesion_archivo] Supabase not available")
+        return None
+
+    try:
+        # Step 1: Create thread with cliente_id in metadata
+        thread_id = str(uuid.uuid4())
+        thread_data = {
+            "id": thread_id,
+            "contact_id": str(uuid.uuid4()),  # Placeholder UUID; real contact linking in future PR
+            "topic": f"Voice call - cliente {cliente_id}",
+            "metadata": {"cliente_id": str(cliente_id)},
+            "status": "active",
+        }
+        thread_result = supabase.table("conversation_threads").insert(thread_data).execute()
+        if not thread_result.data:
+            print("[crear_sesion_archivo] Failed to create thread")
+            return None
+        created_thread = thread_result.data[0]
+
+        # Step 2: Create session with channel_type='voice'
+        now_iso = datetime.now(timezone.utc).isoformat()
+        session_data_payload = {
+            "thread_id": created_thread["id"],
+            "channel_type": "voice",
+            "status": "active",
+            "started_at": session_data.get("started_at", now_iso),
+            "metadata": {
+                "cliente_id": str(cliente_id),
+                "resumen": session_data.get("resumen", ""),
+                "intention": session_data.get("intention", ""),
+                "score_lead": session_data.get("score_lead"),
+                "servicios_interes": session_data.get("servicios_interes", []),
+                "recomendaciones": session_data.get("recomendaciones", ""),
+            },
+        }
+        session_result = supabase.table("conversation_sessions").insert(session_data_payload).execute()
+        if not session_result.data:
+            print("[crear_sesion_archivo] Failed to create session")
+            return None
+        created_session = session_result.data[0]
+
+        print(f"[crear_sesion_archivo] Session created: session={created_session['id']}, thread={created_thread['id']}")
+        return {"session_id": created_session["id"], "thread_id": created_thread["id"]}
+
+    except Exception as ex:
+        print(f"[crear_sesion_archivo] Error: {ex}")
+        return None
 
 # ─────────────────────────────────────────────
 # BASE DE CONOCIMIENTO
@@ -732,7 +798,21 @@ def ejecutar_tool(nombre: str, args: dict[str, Any] | None = None) -> dict[str, 
         if not cliente_id:
             return {"error": "No hay cliente registrado. Llama primero a registrar_datos_cliente."}
 
-        # Insertar en tabla llamadas
+        # Build session data for the new helper
+        session_data = {
+            "resumen": resumen,
+            "intention": intention,
+            "score_lead": score_lead,
+            "servicios_interes": servicios_interes or [],
+            "recomendaciones": recomendaciones,
+            "started_at": _cliente_actual.get("started_at"),
+        }
+
+        # NEW: Create unified session in conversation_sessions via helper
+        session_result = crear_sesion_archivo(cliente_id, session_data)
+        unified_session_id = session_result["session_id"] if session_result else None
+
+        # LEGACY: Also insert into sesiones (archive table) for backward compatibility
         started_at = _cliente_actual.get("started_at")
         row = {
             "cliente_id": cliente_id,
@@ -744,22 +824,33 @@ def ejecutar_tool(nombre: str, args: dict[str, Any] | None = None) -> dict[str, 
             "started_at": started_at,
         }
 
+        legacy_id = None
         if supabase is not None:
             try:
-                resultado = supabase.table("llamadas").insert(row).execute()
+                resultado = supabase.table("sesiones").insert(row).execute()
                 if resultado.data and len(resultado.data) > 0:
-                    llamada_id = resultado.data[0]["id"]
-                    print(f"[Supabase] Llamada registrada: id={llamada_id}")
-                    return {"registrado": True, "llamada_id": llamada_id}
-                else:
-                    print(f"[Supabase] Llamada registrada sin返回 ID")
-                    return {"registrado": True}
+                    legacy_id = resultado.data[0]["id"]
+                    print(f"[Supabase] Sesión legacy registrada: id={legacy_id}")
             except Exception as ex:
-                print(f"[Supabase] Error al registrar llamada: {ex}")
-                return {"error": f"Error al registrar llamada: {ex}"}
-        else:
-            print(f"[BD] Llamada registrada (sin Supabase): cliente_id={cliente_id}, resumen={resumen!r}")
-            return {"registrado": True}
+                print(f"[Supabase] Error al registrar sesión legacy: {ex}")
+
+        # Close the unified session as completed
+        if unified_session_id and supabase is not None:
+            try:
+                supabase.table("conversation_sessions").update({
+                    "status": "completed",
+                    "ended_at": datetime.now(timezone.utc).isoformat(),
+                }).eq("id", unified_session_id).execute()
+                print(f"[Supabase] Unified session closed: {unified_session_id}")
+            except Exception as ex:
+                print(f"[Supabase] Error closing unified session: {ex}")
+
+        response: dict[str, Any] = {"registrado": True}
+        if legacy_id is not None:
+            response["llamada_id"] = legacy_id
+        if unified_session_id is not None:
+            response["session_id"] = unified_session_id
+        return response
 
     else:
         return {"error": f"Tool '{nombre}' no reconocida."}

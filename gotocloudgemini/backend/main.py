@@ -294,14 +294,14 @@ async def dashboard_summary():
         yesterday_end,
     )
     calls_today = _safe_query(
-        "llamadas",
+        "sesiones",
         "id,started_at,ended_at,duracion_segundos,intention,score_lead,servicios_interes,recomendaciones,created_at",
         "started_at",
         today_start,
         today_end,
     )
     calls_yesterday = _safe_query(
-        "llamadas",
+        "sesiones",
         "id,started_at,duracion_segundos,created_at",
         "started_at",
         yesterday_start,
@@ -372,8 +372,9 @@ async def dashboard_summary():
     channel_counts = Counter(
         session.get("channel_type") or "desconocido" for session in sessions_today
     )
-    if calls_today and not channel_counts:
-        channel_counts["voice"] = len(calls_today)
+    # Legacy sesiones are all voice calls during transition period
+    if calls_today:
+        channel_counts["voice"] += len(calls_today)
 
     reason_counts = Counter()
     for call in calls_today:
@@ -532,6 +533,7 @@ async def chat_message(request: dict):
     message = (request.get("message") or "").strip()
     session_id = request.get("session_id")
     model = request.get("model")
+    ended_flag = request.get("ended", False)
 
     if not message:
         from fastapi.responses import JSONResponse
@@ -548,8 +550,34 @@ async def chat_message(request: dict):
         _sessions[session.session_id] = session
         session_id = session.session_id
 
+        # Create DB thread + session for persistence (REQ-5, REQ-7)
+        await _ensure_chat_session_db(session)
+
     try:
+        # Persist user message before sending to Gemini (REQ-6)
+        if session.db_session_id:
+            await orchestrator.memory.add_message(
+                session.db_session_id,
+                "user",
+                message,
+            )
+
         result = await session.send_message(message)
+
+        # Persist agent response after Gemini replies (REQ-6)
+        if session.db_session_id and result.get("reply"):
+            await orchestrator.memory.add_message(
+                session.db_session_id,
+                "agent",
+                result["reply"],
+                metadata={"tool_calls": result.get("tool_calls", [])},
+            )
+
+        # Close session when conversation ends (REQ-7)
+        if result.get("ended") or ended_flag:
+            if session.db_session_id:
+                await orchestrator.session_manager.close_session(session.db_session_id)
+
     except Exception as exc:
         error_msg = str(exc)
         logger.error(f"Text agent error: {error_msg}")
@@ -573,6 +601,39 @@ async def chat_message(request: dict):
         "tool_calls": result["tool_calls"],
         "ended": result["ended"],
     }
+
+
+async def _ensure_chat_session_db(session: TextAgentSession) -> None:
+    """Create a conversation_thread + conversation_session (webchat) for DB persistence.
+
+    Called once when a new TextAgentSession is created. Sets db_session_id
+    and db_thread_id on the session object for subsequent message persistence.
+    """
+    if supabase is None:
+        logger.debug("Supabase not available — skipping chat session persistence")
+        return
+
+    try:
+        # Use anonymous external_id for webchat contacts
+        thread = await orchestrator.session_manager.find_or_create_thread(
+            contact_id="webchat-anonymous",
+            topic="Web chat session",
+        )
+
+        chat_session = await orchestrator.session_manager.create_session(
+            thread["id"],
+            channel_type="webchat",
+        )
+
+        session.db_session_id = chat_session["id"]
+        session.db_thread_id = thread["id"]
+        logger.info(
+            f"Chat DB session created: session={chat_session['id']}, "
+            f"thread={thread['id']}"
+        )
+    except Exception as exc:
+        logger.warning(f"Failed to create chat DB session: {exc}")
+        # Graceful degrade — session works without persistence
 
 
 @app.get("/twiml")
