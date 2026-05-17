@@ -75,7 +75,7 @@ app.add_middleware(
 
 # Multi-channel infrastructure lifecycle
 event_bus = EventBus()
-orchestrator = AgentOrchestrator(event_bus=event_bus)
+orchestrator = AgentOrchestrator(supabase=supabase, event_bus=event_bus)
 
 
 @app.on_event("startup")
@@ -694,8 +694,10 @@ async def chat_message(request: dict, background_tasks: BackgroundTasks):
     }
 
 
-async def _ensure_chat_session_db(session: TextAgentSession) -> None:
-    """Create a conversation_thread + conversation_session (webchat) for DB persistence.
+async def _ensure_chat_session_db(
+    session: TextAgentSession, channel_type: str = "webchat"
+) -> None:
+    """Create a conversation_thread + conversation_session for DB persistence.
 
     Called once when a new TextAgentSession is created. Sets db_session_id
     and db_thread_id on the session object for subsequent message persistence.
@@ -705,28 +707,50 @@ async def _ensure_chat_session_db(session: TextAgentSession) -> None:
         return
 
     try:
-        # Webchat sessions are anonymous — create a new thread without a contact_id
-        # (contact_id is nullable in conversation_threads; passing "webchat-anonymous"
-        # would violate the UUID FK constraint)
+        topic = "WhatsApp session" if channel_type == "whatsapp" else "Web chat session"
         thread_result = supabase.table("conversation_threads").insert(
-            {"topic": "Web chat session", "status": "active"}
+            {"topic": topic, "status": "active"}
         ).execute()
         thread = thread_result.data[0]
 
         chat_session = await orchestrator.session_manager.create_session(
             thread["id"],
-            channel_type="webchat",
+            channel_type=channel_type,
         )
 
         session.db_session_id = chat_session["id"]
         session.db_thread_id = thread["id"]
         logger.info(
-            f"Chat DB session created: session={chat_session['id']}, "
+            f"Chat DB session created [{channel_type}]: session={chat_session['id']}, "
             f"thread={thread['id']}"
         )
     except Exception as exc:
         logger.warning(f"Failed to create chat DB session: {exc}")
         # Graceful degrade — session works without persistence
+
+
+async def _persist_messages_bg(
+    session_id: str, user_message: str, result: dict
+) -> None:
+    """Persist user + agent messages to the messages table (background task)."""
+    if supabase is None:
+        return
+    try:
+        supabase.table("messages").insert([
+            {
+                "session_id": session_id,
+                "sender": "user",
+                "content": user_message,
+            },
+            {
+                "session_id": session_id,
+                "sender": "agent",
+                "content": result.get("reply", ""),
+                "metadata": {"tool_calls": result.get("tool_calls", [])},
+            },
+        ]).execute()
+    except Exception as exc:
+        logger.warning(f"Message persistence failed: {exc}")
 
 
 @app.get("/twiml")

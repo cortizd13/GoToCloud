@@ -329,7 +329,7 @@ COMMENT ON TABLE public.lead_alerts_log IS 'Log de alertas webhook enviadas para
 
 -- Índices para performance de queries de conversión
 CREATE INDEX IF NOT EXISTS idx_agent_citas_fecha ON public.agent_citas(fecha_hora);
-CREATE INDEX IF NOT EXISTS idx_lead_summaries_intencion ON public.sesiones(intencion);
+CREATE INDEX IF NOT EXISTS idx_lead_summaries_intention ON public.sesiones(intention);
 CREATE INDEX IF NOT EXISTS idx_lead_alerts_log_status ON public.lead_alerts_log(status);
 
 -- =============================================================
@@ -652,3 +652,54 @@ SELECT 'agent_citas', COUNT(*) FROM public.agent_citas
 UNION ALL
 SELECT 'lead_alerts_log', COUNT(*) FROM public.lead_alerts_log
 ORDER BY tabla;
+
+-- =============================================================
+--  Parches adicionales — ejecutar después del schema principal
+--  (idempotente: IF NOT EXISTS / DROP IF EXISTS antes de CREATE)
+-- =============================================================
+
+-- 1. Columna metadata en conversation_sessions (usada por crear_sesion_archivo)
+ALTER TABLE public.conversation_sessions
+    ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+
+-- 2. Columnas de conversión en sesiones (guard duplicado — ya están en la sección anterior)
+ALTER TABLE public.sesiones
+    ADD COLUMN IF NOT EXISTS presupuesto_estimado VARCHAR,
+    ADD COLUMN IF NOT EXISTS timeline VARCHAR,
+    ADD COLUMN IF NOT EXISTS decision_maker BOOLEAN,
+    ADD COLUMN IF NOT EXISTS score_auto INTEGER,
+    ADD COLUMN IF NOT EXISTS alerta_enviada BOOLEAN DEFAULT FALSE;
+
+-- 3. Políticas RLS de UPDATE faltantes
+--    (las tablas ya tienen RLS habilitado arriba)
+
+-- clientes: UPDATE anónimo (necesario para registrar_datos_cliente al actualizar cliente existente)
+DROP POLICY IF EXISTS "anon_update_clientes" ON public.clientes;
+CREATE POLICY "anon_update_clientes" ON public.clientes
+    FOR UPDATE USING (true) WITH CHECK (true);
+
+-- sesiones: UPDATE anónimo
+DROP POLICY IF EXISTS "anon_update_sesiones" ON public.sesiones;
+CREATE POLICY "anon_update_sesiones" ON public.sesiones
+    FOR UPDATE USING (true) WITH CHECK (true);
+
+-- conversation_sessions: INSERT + UPDATE anónimo
+DROP POLICY IF EXISTS "anon_update_conversation_sessions" ON public.conversation_sessions;
+CREATE POLICY "anon_update_conversation_sessions" ON public.conversation_sessions
+    FOR UPDATE USING (true) WITH CHECK (true);
+
+-- conversation_threads: UPDATE anónimo (para calificar_necesidad)
+DROP POLICY IF EXISTS "anon_update_conversation_threads" ON public.conversation_threads;
+CREATE POLICY "anon_update_conversation_threads" ON public.conversation_threads
+    FOR UPDATE USING (true) WITH CHECK (true);
+
+-- contacts: UPDATE anónimo (para _resolve_contact al actualizar datos del contacto)
+DROP POLICY IF EXISTS "anon_update_contacts" ON public.contacts;
+CREATE POLICY "anon_update_contacts" ON public.contacts
+    FOR UPDATE USING (true) WITH CHECK (true);
+
+-- messages: no necesita UPDATE — solo INSERT y SELECT
+
+-- 4. Habilitar RLS en conversation_sessions si aún no está habilitado
+--    (ya se hace arriba pero guard duplicado no hace daño)
+ALTER TABLE public.conversation_sessions ENABLE ROW LEVEL SECURITY;
