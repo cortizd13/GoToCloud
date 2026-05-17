@@ -49,7 +49,7 @@ def seed():
     
     try:
         client.table("empresa").upsert(empresa_data).execute()
-        print("[Seed] ✓ Empresa insertada (id=1)")
+        print("[Seed] [OK] Empresa insertada (id=1)")
     except Exception as e:
         print(f"[Seed] ERROR en empresa: {e}")
     
@@ -92,7 +92,7 @@ def seed():
         except Exception as e:
             print(f"[Seed] ERROR en servicio {sid}: {e}")
     
-    print(f"[Seed] ✓ {servicios_count} servicios insertados")
+    print(f"[Seed] [OK] {servicios_count} servicios insertados")
     
     # ─────────────────────────────────────────────
     # 3. Productos SaaS (3 rows) — vienen de soluciones_saas.productos
@@ -119,7 +119,7 @@ def seed():
         except Exception as e:
             print(f"[Seed] ERROR en producto {pid}: {e}")
     
-    print(f"[Seed] ✓ {productos_count} productos SaaS insertados")
+    print(f"[Seed] [OK] {productos_count} productos SaaS insertados")
     
     # ─────────────────────────────────────────────
     # 4. Métricas (8 rows)
@@ -132,7 +132,7 @@ def seed():
         except Exception as e:
             print(f"[Seed] ERROR en métrica {clave}: {e}")
     
-    print(f"[Seed] ✓ {metricas_count} métricas insertadas")
+    print(f"[Seed] [OK] {metricas_count} métricas insertadas")
     
     # ─────────────────────────────────────────────
     # Verificar counts
@@ -151,7 +151,7 @@ def seed():
         print(f"  - productos_saas: {productos_count_db} row(s)")
         
         if empresa_count >= 1 and servicios_count_db >= 6 and metricas_count_db >= 8 and productos_count_db >= 3:
-            print("\n[Seed] ✓ Seed completado exitosamente!")
+            print("\n[Seed] [OK] Seed completado exitosamente!")
         else:
             print("\n[Seed] ADVERTENCIA: Algunos counts no alcanzaron el objetivo")
     except Exception as e:

@@ -514,6 +514,107 @@ GOTOCLOUD_TOOLS: list[dict[str, Any]] = [
             "required": ["resumen", "intention", "score_lead"],
         },
     },
+    {
+        "name": "agendar_cita",
+        "description": (
+            "Agenda una cita con un asesor de GoToCloud usando Calendly. "
+            "Úsala cuando el lead muestre interés activo y acepte agendar una reunión. "
+            "Retorna un link de confirmación para que el cliente elija horario."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "lead_id": {
+                    "type": "string",
+                    "description": "ID del lead en Supabase (conversation_threads UUID).",
+                },
+                "servicio_interes": {
+                    "type": "string",
+                    "description": "Servicio o producto de interés del lead.",
+                },
+                "preferencias": {
+                    "type": "object",
+                    "properties": {
+                        "dia_preferido": {
+                            "type": "string",
+                            "enum": ["lunes", "martes", "miercoles", "jueves", "viernes"],
+                        },
+                        "hora_preferida": {"type": "string"},
+                        "tema": {"type": "string"},
+                    },
+                },
+            },
+            "required": ["lead_id"],
+        },
+    },
+    {
+        "name": "calificar_necesidad",
+        "description": (
+            "Captura información de presupuesto, timeline y urgencia del lead. "
+            "Úsala después del registro básico para calificar la oportunidad. "
+            "Los datos se guardan en conversation_threads para seguimiento del vendedor."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "lead_id": {
+                    "type": "string",
+                    "description": "ID del lead en Supabase (conversation_threads UUID).",
+                },
+                "presupuesto_estimado": {
+                    "type": "string",
+                    "description": "Rango de presupuesto: '$1M-5M', '$5M-10M', '$10M-20M', '+$20M', 'sin_definir'.",
+                },
+                "timeline": {
+                    "type": "string",
+                    "enum": ["inmediato", "1-3 meses", "3-6 meses", "sin fecha"],
+                    "description": "Timeline de decisión del lead.",
+                },
+                "urgencia": {
+                    "type": "string",
+                    "enum": ["alta", "media", "baja"],
+                    "description": "Nivel de urgencia del lead.",
+                },
+                "decision_maker": {
+                    "type": "boolean",
+                    "description": "Si el lead es tomador de decisiones.",
+                },
+            },
+            "required": ["lead_id"],
+        },
+    },
+    {
+        "name": "notificar_lead_caliente",
+        "description": (
+            "Alerta al equipo de ventas sobre un lead con alta intención de compra. "
+            "Se dispara automáticamente cuando score_lead > 70 o intention = 'caliente'. "
+            "Envía un webhook al equipo de ventas con los datos del lead."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "lead_id": {
+                    "type": "string",
+                    "description": "ID del lead en Supabase (conversation_threads UUID).",
+                },
+                "score_lead": {
+                    "type": "integer",
+                    "description": "Score del lead 0-100.",
+                },
+                "canal": {
+                    "type": "string",
+                    "enum": ["voice", "whatsapp", "webchat"],
+                    "description": "Canal de comunicación del lead.",
+                },
+                "intencion": {
+                    "type": "string",
+                    "enum": ["fria", "calida", "caliente"],
+                    "description": "Clasificación de intención del lead.",
+                },
+            },
+            "required": ["lead_id", "score_lead"],
+        },
+    },
 ]
 
 
@@ -538,10 +639,16 @@ def ejecutar_tool(nombre: str, args: dict[str, Any] | None = None) -> dict[str, 
         cedula = args.get("cedula", "").strip()
         empresa_cliente = args.get("empresa", "").strip()
         telefono_cliente = args.get("telefono", "").strip()
+        presupuesto_cliente = args.get("presupuesto_estimado", "").strip()
+        timeline_cliente = args.get("timeline", "").strip()
         _cliente_actual["nombre"] = nombre_cliente
         _cliente_actual["cedula"] = cedula
         _cliente_actual["empresa"] = empresa_cliente
         _cliente_actual["telefono"] = telefono_cliente
+        if presupuesto_cliente:
+            _cliente_actual["presupuesto_estimado"] = presupuesto_cliente
+        if timeline_cliente:
+            _cliente_actual["timeline"] = timeline_cliente
         # Guardar timestamp de inicio de llamada
         _cliente_actual["started_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -599,6 +706,10 @@ def ejecutar_tool(nombre: str, args: dict[str, Any] | None = None) -> dict[str, 
             "empresa": empresa_cliente,
             "telefono": telefono_cliente,
         }
+        if presupuesto_cliente:
+            response["presupuesto_estimado"] = presupuesto_cliente
+        if timeline_cliente:
+            response["timeline"] = timeline_cliente
         if ya_registrado:
             response["mensaje"] = (
                 f"Cliente ya registrado. Datos actualizados para {nombre_cliente}."
@@ -851,6 +962,48 @@ def ejecutar_tool(nombre: str, args: dict[str, Any] | None = None) -> dict[str, 
         if unified_session_id is not None:
             response["session_id"] = unified_session_id
         return response
+
+    elif nombre == "agendar_cita":
+        from backend.conversion.tools import agendar_cita as _agendar_cita
+
+        lead_id = args.get("lead_id", "").strip()
+        servicio_interes = args.get("servicio_interes")
+        preferencias = args.get("preferencias")
+        if not lead_id:
+            return {"error": "lead_id es requerido para agendar_cita"}
+        return _agendar_cita(
+            lead_id=lead_id,
+            servicio_interes=servicio_interes,
+            preferencias=preferencias,
+        )
+
+    elif nombre == "calificar_necesidad":
+        from backend.conversion.tools import calificar_necesidad as _calificar_necesidad
+
+        lead_id = args.get("lead_id", "").strip()
+        if not lead_id:
+            return {"error": "lead_id es requerido para calificar_necesidad"}
+        return _calificar_necesidad(
+            lead_id=lead_id,
+            presupuesto_estimado=args.get("presupuesto_estimado"),
+            timeline=args.get("timeline"),
+            urgencia=args.get("urgencia"),
+            decision_maker=args.get("decision_maker"),
+        )
+
+    elif nombre == "notificar_lead_caliente":
+        from backend.conversion.tools import notificar_lead_caliente as _notificar_lead_caliente
+
+        lead_id = args.get("lead_id", "").strip()
+        score_lead = args.get("score_lead", 0)
+        if not lead_id:
+            return {"error": "lead_id es requerido para notificar_lead_caliente"}
+        return _notificar_lead_caliente(
+            lead_id=lead_id,
+            score_lead=score_lead,
+            canal=args.get("canal", "voice"),
+            intencion=args.get("intencion"),
+        )
 
     else:
         return {"error": f"Tool '{nombre}' no reconocida."}
