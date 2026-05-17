@@ -103,7 +103,7 @@ export default function VoiceCallWidget({ onClose }: Props) {
         )}
       </header>
 
-      <div className="voice-call-widget__body" aria-live="polite">
+      <div className="voice-call-widget__body">
         {transcript.map((entry) => (
           <div
             key={entry.id}
@@ -116,6 +116,8 @@ export default function VoiceCallWidget({ onClose }: Props) {
         ))}
 
         <div
+          aria-live="polite"
+          aria-atomic="true"
           className={`voice-call-widget__status voice-call-widget__status--${status}`}
         >
           {status === 'error' ? errorMsg : STATUS_LABELS[status]}
