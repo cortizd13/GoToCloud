@@ -3,6 +3,7 @@ python-dotenv
 pyaudio
 fastapi
 uvicorn[standard]
+python-multipart
 pytest
 pytest-asyncio
 httpx

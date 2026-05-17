@@ -29,7 +29,7 @@ from service.gotocloud_voicebot_tool import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-2.0-flash"
+DEFAULT_MODEL = "gemini-3-flash-preview"
 
 SYSTEM_PROMPT_WHATSAPP = """
 Eres Camila, asistente de GoToCloud por WhatsApp. GoToCloud es empresa colombiana líder en transformación digital y soluciones cloud, partner certificado de Microsoft Azure.
