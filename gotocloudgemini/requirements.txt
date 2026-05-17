@@ -1,6 +1,5 @@
 google-genai
 python-dotenv
-pyaudio
 fastapi
 uvicorn[standard]
 python-multipart

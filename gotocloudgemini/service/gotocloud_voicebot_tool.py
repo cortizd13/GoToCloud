@@ -584,6 +584,25 @@ GOTOCLOUD_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "continuar_por_whatsapp",
+        "description": (
+            "Envía un mensaje de WhatsApp al cliente para que pueda continuar la conversación "
+            "por ese canal. Úsala cuando el cliente pida seguir por WhatsApp, quiera recibir "
+            "información por escrito, o prefiera chatear en vez de llamar. "
+            "El teléfono debe estar registrado previamente con registrar_datos_cliente."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "mensaje_bienvenida": {
+                    "type": "string",
+                    "description": "Mensaje personalizado a enviar. Si no se especifica, se usa uno por defecto.",
+                }
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "notificar_lead_caliente",
         "description": (
             "Alerta al equipo de ventas sobre un lead con alta intención de compra. "
@@ -1072,6 +1091,49 @@ def ejecutar_tool(nombre: str, args: dict[str, Any] | None = None) -> dict[str, 
             decision_maker=args.get("decision_maker"),
         )
 
+    elif nombre == "continuar_por_whatsapp":
+        telefono = _cliente_actual.get("telefono", "").strip()
+        if not telefono:
+            return {"error": "No hay teléfono registrado. Pide el número al cliente antes de usar esta tool."}
+
+        # Normalizar a E.164
+        numero = telefono.replace(" ", "").replace("-", "")
+        if not numero.startswith("+"):
+            numero = f"+57{numero}"
+
+        nombre_c = _cliente_actual.get("nombre", "")
+        primer_nombre = nombre_c.split()[0] if nombre_c else ""
+        mensaje = (args.get("mensaje_bienvenida") or "").strip() or (
+            f"¡Hola{' ' + primer_nombre if primer_nombre else ''}! Soy Camila de GoToCloud. "
+            "Puedes continuar nuestra conversación por aquí cuando lo desees. "
+            "¿En qué más te puedo ayudar?"
+        )
+
+        try:
+            import os as _os
+            from twilio.rest import Client as _TwilioClient
+
+            _sid = _os.getenv("TWILIO_ACCOUNT_SID", "")
+            _token = _os.getenv("TWILIO_AUTH_TOKEN", "")
+            _from_wa = _os.getenv("TWILIO_WHATSAPP_NUMBER", "")
+
+            if not _sid or not _token or not _from_wa:
+                return {"error": "Twilio WhatsApp no configurado. Verifica TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN y TWILIO_WHATSAPP_NUMBER en .env"}
+
+            _cliente_twilio = _TwilioClient(_sid, _token)
+            _to_wa = f"whatsapp:{numero}" if not numero.startswith("whatsapp:") else numero
+            _msg = _cliente_twilio.messages.create(from_=_from_wa, body=mensaje, to=_to_wa)
+
+            print(f"[WhatsApp] Mensaje de continuación enviado a {numero}, sid={_msg.sid}")
+            return {
+                "enviado": True,
+                "numero": numero,
+                "mensaje": f"Mensaje de WhatsApp enviado a {numero}. Dile al cliente que revise su WhatsApp.",
+            }
+        except Exception as ex:
+            print(f"[WhatsApp] Error al enviar mensaje de continuación: {ex}")
+            return {"error": f"No se pudo enviar el mensaje de WhatsApp: {ex}"}
+
     elif nombre == "notificar_lead_caliente":
         from backend.conversion.tools import notificar_lead_caliente as _notificar_lead_caliente
 
@@ -1217,9 +1279,15 @@ Al final de la conversación, cuando el cliente indique que se va, agradezca o n
    - Servicios de interés: solo los que mencionó explícitamente
    - Recomendaciones: qué debería hacer el vendedor en el seguimiento
 3. Después de recibir la confirmación de la tool:
-   - Si se agendó cita durante la conversación, confirma la fecha y hora al lead
-   - Si el lead mostró interés pero no agendó cita, indícale que recibirá un email de seguimiento con la información que conversaron
-4. Despidete cordialmente
+   - Si se agendó cita durante la conversación, confirma al lead que quedó registrada
+   - Si el lead mostró interés pero no agendó cita, indícale que un asesor se comunicará pronto
+4. Despídete cordialmente. La llamada se cerrará automáticamente.
+
+## CONTINUAR POR WHATSAPP
+Cuando el cliente pida seguir la conversación por WhatsApp, quiera recibir información por escrito, o prefiera chatear en vez de llamar:
+1. Llama `continuar_por_whatsapp` — el teléfono del cliente debe estar registrado (si no lo está, pídelo primero)
+2. Confirma al cliente que le enviaste un mensaje a su WhatsApp y que puede continuar por ahí cuando quiera
+3. No compartas el número de WhatsApp de GoToCloud manualmente — la tool ya lo hace
 """.strip()
 
 

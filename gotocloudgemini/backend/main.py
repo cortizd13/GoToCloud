@@ -822,9 +822,20 @@ async def twilio_stream(websocket: WebSocket):
 
     gemini = GeminiLiveClient()
     logger.info("[WS] Connecting to Gemini Live...")
+
+    # Flag para colgar automáticamente tras registrar_resumen_llamada
+    call_should_end: list[bool] = [False]
+
+    def tool_handler_voice(nombre: str, args: dict) -> dict:
+        result = ejecutar_tool(nombre, args) if ejecutar_tool else {"error": "tools no disponibles"}
+        if nombre == "registrar_resumen_llamada" and result.get("registrado"):
+            call_should_end[0] = True
+            logger.info("[HANGUP] registrar_resumen_llamada OK — la llamada colgará tras el saludo")
+        return result
+
     await gemini.connect(
         tools=GOTOCLOUD_TOOLS,
-        tool_handler=ejecutar_tool,
+        tool_handler=tool_handler_voice,
         system_instruction=SYSTEM_PROMPT,
         voice_name="Aoede",
     )
@@ -928,6 +939,13 @@ async def twilio_stream(websocket: WebSocket):
                         }))
                     except Exception as exc:
                         logger.warning(f"Audio conversion error (Gemini→Twilio): {exc}")
+
+                # Turno completado — colgar si registrar_resumen_llamada ya se ejecutó
+                if call_should_end[0] and not stop_event.is_set():
+                    logger.info("[HANGUP] Colgando llamada — turno de despedida completado")
+                    await asyncio.sleep(1.0)  # margen para que Twilio reproduzca el audio
+                    stop_event.set()
+                    break
         except asyncio.CancelledError:
             pass
         except Exception as exc:
