@@ -28,6 +28,7 @@ export class VoiceSession {
   private workletNode: AudioWorkletNode | null = null;
   private mediaStream: MediaStream | null = null;
   private nextPlayTime = 0;
+  private _hungUp = false;
 
   constructor(callbacks: VoiceSessionCallbacks) {
     this.callbacks = callbacks;
@@ -73,8 +74,18 @@ export class VoiceSession {
 
   async startCapture(): Promise<void> {
     this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    if (this._hungUp) {
+      this.mediaStream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+
     this.audioContext = new AudioContext();
     await this.audioContext.audioWorklet.addModule(processorUrl);
+
+    if (this._hungUp) {
+      this.audioContext.close().catch(() => undefined);
+      return;
+    }
 
     const source = this.audioContext.createMediaStreamSource(this.mediaStream);
     this.workletNode = new AudioWorkletNode(this.audioContext, 'pcm-processor');
@@ -115,8 +126,14 @@ export class VoiceSession {
   }
 
   hangUp(): void {
+    this._hungUp = true;
     if (this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: 'stop' }));
+    }
+    if (
+      this.ws.readyState === WebSocket.OPEN ||
+      this.ws.readyState === WebSocket.CONNECTING
+    ) {
       this.ws.close();
     }
     this.workletNode?.disconnect();
