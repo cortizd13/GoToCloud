@@ -85,7 +85,7 @@ function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
       <header className="chatbot-widget__header">
         <div className="chatbot-widget__agent">
           <span className="chatbot-widget__avatar">
-            <MdOutlineSmartToy size={22} />
+            <img src="" alt="" />
           </span>
           <div>
             <strong>Camila</strong>
