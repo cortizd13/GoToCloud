@@ -281,6 +281,58 @@ CREATE INDEX IF NOT EXISTS idx_analytics_events_payload_gin ON public.analytics_
 CREATE INDEX IF NOT EXISTS idx_memory_embeddings_vector_ivfflat ON public.memory_embeddings USING ivfflat(embedding vector_cosine_ops) WITH (lists = 100);
 
 -- =============================================================
+--  Mejora Tasa de Conversión — Phase 1 Tables & Columns
+--  All IF NOT EXISTS for idempotent execution
+-- =============================================================
+
+-- Tabla para citas agendadas por el agente
+CREATE TABLE IF NOT EXISTS public.agent_citas (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    cliente_id          UUID REFERENCES public.contacts(id) ON DELETE SET NULL,
+    lead_id             UUID REFERENCES public.conversation_threads(id) ON DELETE SET NULL,
+    fecha_hora          TIMESTAMP NOT NULL,
+    link_confirmacion   VARCHAR,
+    estado              VARCHAR CHECK (estado IN ('pendiente', 'confirmada', 'cancelada', 'completada')) DEFAULT 'pendiente',
+    created_at          TIMESTAMPTZ DEFAULT now()
+);
+
+COMMENT ON TABLE public.agent_citas IS 'Citas agendadas por el agente Camila con asesores de GoToCloud';
+
+-- Extensión de sesiones con columnas de conversión
+ALTER TABLE public.sesiones
+ADD COLUMN IF NOT EXISTS presupuesto_estimado VARCHAR,
+ADD COLUMN IF NOT EXISTS timeline VARCHAR,
+ADD COLUMN IF NOT EXISTS decision_maker BOOLEAN,
+ADD COLUMN IF NOT EXISTS score_auto INTEGER,
+ADD COLUMN IF NOT EXISTS alerta_enviada BOOLEAN DEFAULT FALSE;
+
+-- Extensión de conversation_threads con columnas de conversión
+ALTER TABLE public.conversation_threads
+ADD COLUMN IF NOT EXISTS presupuesto_estimado VARCHAR,
+ADD COLUMN IF NOT EXISTS timeline VARCHAR,
+ADD COLUMN IF NOT EXISTS decision_maker BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS score_auto INTEGER,
+ADD COLUMN IF NOT EXISTS alerta_enviada BOOLEAN DEFAULT FALSE;
+
+-- Tabla para logging de alertas de lead caliente
+CREATE TABLE IF NOT EXISTS public.lead_alerts_log (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lead_id         UUID REFERENCES public.conversation_threads(id) ON DELETE SET NULL,
+    webhook_url     VARCHAR,
+    payload         JSONB,
+    status          VARCHAR CHECK (status IN ('enviada', 'fallida', 'retry')),
+    attempts        INTEGER DEFAULT 0,
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+COMMENT ON TABLE public.lead_alerts_log IS 'Log de alertas webhook enviadas para leads calientes';
+
+-- Índices para performance de queries de conversión
+CREATE INDEX IF NOT EXISTS idx_agent_citas_fecha ON public.agent_citas(fecha_hora);
+CREATE INDEX IF NOT EXISTS idx_lead_summaries_intencion ON public.sesiones(intencion);
+CREATE INDEX IF NOT EXISTS idx_lead_alerts_log_status ON public.lead_alerts_log(status);
+
+-- =============================================================
 --  Permisos: habilitar acceso anónimo (lectura/escritura)
 --  NOTA: Ajustar según necesidad de seguridad en producción
 -- =============================================================
@@ -415,6 +467,20 @@ CREATE POLICY "anon_select_agent_tools" ON public.agent_tools FOR SELECT USING (
 CREATE POLICY "anon_insert_agent_tools" ON public.agent_tools FOR INSERT WITH CHECK (true);
 CREATE POLICY "anon_select_analytics_events" ON public.analytics_events FOR SELECT USING (true);
 CREATE POLICY "anon_insert_analytics_events" ON public.analytics_events FOR INSERT WITH CHECK (true);
+
+-- RLS policies for conversion rate improvement tables
+ALTER TABLE public.agent_citas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lead_alerts_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "anon_select_agent_citas" ON public.agent_citas;
+DROP POLICY IF EXISTS "anon_insert_agent_citas" ON public.agent_citas;
+DROP POLICY IF EXISTS "anon_select_lead_alerts_log" ON public.lead_alerts_log;
+DROP POLICY IF EXISTS "anon_insert_lead_alerts_log" ON public.lead_alerts_log;
+
+CREATE POLICY "anon_select_agent_citas" ON public.agent_citas FOR SELECT USING (true);
+CREATE POLICY "anon_insert_agent_citas" ON public.agent_citas FOR INSERT WITH CHECK (true);
+CREATE POLICY "anon_select_lead_alerts_log" ON public.lead_alerts_log FOR SELECT USING (true);
+CREATE POLICY "anon_insert_lead_alerts_log" ON public.lead_alerts_log FOR INSERT WITH CHECK (true);
 
 -- =============================================================
 --  Seed data (INSERT con ON CONFLICT para ser idempotente)
@@ -581,4 +647,8 @@ UNION ALL
 SELECT 'agent_tools', COUNT(*) FROM public.agent_tools
 UNION ALL
 SELECT 'analytics_events', COUNT(*) FROM public.analytics_events
+UNION ALL
+SELECT 'agent_citas', COUNT(*) FROM public.agent_citas
+UNION ALL
+SELECT 'lead_alerts_log', COUNT(*) FROM public.lead_alerts_log
 ORDER BY tabla;
