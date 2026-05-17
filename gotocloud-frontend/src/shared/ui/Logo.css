@@ -1,0 +1,8 @@
+.gtc-logo {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+.gtc-logo svg { width: auto; }
+.gtc-logo--sm svg { height: 32px; }
+.gtc-logo--md svg { height: 40px; }

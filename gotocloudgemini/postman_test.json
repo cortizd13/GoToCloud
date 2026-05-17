@@ -1,0 +1,40 @@
+{
+  "info": {
+    "name": "GotoCloud Voicebot",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": "http://localhost:8000/health"
+      }
+    },
+    {
+      "name": "TwiML - simular llamada entrante Twilio",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "CallSid",    "value": "CAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" },
+            { "key": "AccountSid", "value": "ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" },
+            { "key": "From",       "value": "+573001234567" },
+            { "key": "To",         "value": "+12345678901" },
+            { "key": "CallStatus", "value": "ringing" },
+            { "key": "Direction",  "value": "inbound" },
+            { "key": "ApiVersion", "value": "2010-04-01" }
+          ]
+        },
+        "url": "http://localhost:8000/twiml"
+      }
+    }
+  ]
+}

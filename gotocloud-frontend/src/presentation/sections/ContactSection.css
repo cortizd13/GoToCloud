@@ -1,0 +1,256 @@
+/* =========================================================
+   Contact Section - GoToCloud replica
+   ========================================================= */
+.gtc-contact {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+/* ---------- HERO ---------- */
+.gtc-contact__hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(4rem, 9vw, 7rem) 0 clamp(3rem, 6vw, 5rem);
+  background:
+    radial-gradient(1100px 600px at 80% -10%, rgba(22,164,214,0.18), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(28,108,209,0.20), transparent 65%),
+    linear-gradient(135deg, #0a1a2f 0%, #0f2747 55%, #14365e 100%);
+  color: var(--color-text-on-dark);
+  text-align: center;
+  isolation: isolate;
+}
+
+.gtc-contact__bg-aura {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 100%, rgba(54,192,232,0.15), transparent 50%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.gtc-contact__title {
+  color: var(--gtc-white);
+  font-size: clamp(2rem, 4.2vw, 3.25rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  max-width: 900px;
+  margin: 0 auto var(--space-6);
+}
+
+.gtc-contact__lead {
+  color: var(--color-text-on-dark-muted);
+  font-size: clamp(1rem, 1.4vw, 1.125rem);
+  line-height: 1.65;
+  max-width: 780px;
+  margin: 0 auto var(--space-8);
+}
+.gtc-contact__lead strong {
+  color: var(--gtc-white);
+  font-weight: 600;
+}
+
+.gtc-contact__cta-label {
+  color: var(--color-text-on-dark-muted);
+  font-weight: 600;
+  margin: 0 0 var(--space-4);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gtc-contact__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.85rem 1.6rem;
+  background: linear-gradient(to right, #FEA616, #FE863F);
+  color: var(--gtc-white);
+  font-weight: 600;
+  font-size: var(--fs-md);
+  border-radius: var(--radius-full);
+  box-shadow: 0 10px 26px rgba(0,182,230,0.35);
+  transition: transform var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease), background var(--dur-base) var(--ease);
+  text-decoration: none;
+}
+.gtc-contact__cta:hover {
+  background: linear-gradient(
+  120deg,
+  #6a3d8f 0%,
+  #a65b2f 30%,
+  #f5b000 60%,
+  #ff8a3d 100%
+  );
+  color: var(--gtc-white);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px rgba(0,182,230,0.42);
+}
+
+/* ---------- REGIONS ---------- */
+.gtc-regions {
+  padding: clamp(3.5rem, 7vw, 5.5rem) 0 clamp(2.5rem, 5vw, 4rem);
+  background: var(--color-bg);
+  text-align: center;
+}
+
+.gtc-regions__title,
+.gtc-info__title {
+  color: var(--color-heading);
+  font-size: clamp(1.65rem, 2.6vw, 2.25rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 auto;
+}
+
+.gtc-regions__divider,
+.gtc-info__divider {
+  width: 64px;
+  height: 4px;
+  margin: var(--space-5) auto clamp(2rem, 4vw, 3rem);
+  background: linear-gradient(90deg, var(--gtc-cyan-500), var(--gtc-blue-500));
+  border-radius: var(--radius-full);
+}
+
+.gtc-regions__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(1.5rem, 3vw, 2.25rem) clamp(1rem, 2vw, 1.5rem);
+  max-width: 1080px;
+  margin: 0 auto;
+}
+@media (min-width: 560px) {
+  .gtc-regions__grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 960px) {
+  .gtc-regions__grid { grid-template-columns: repeat(8, 1fr); }
+}
+
+.gtc-region {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  transition: transform var(--dur-base) var(--ease);
+}
+.gtc-region:hover { transform: translateY(-3px); }
+
+.gtc-region__flag {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--gtc-gray-100);
+  box-shadow: var(--shadow-card);
+  border: 2px solid var(--gtc-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gtc-region__flag img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gtc-region__name {
+  color: var(--gtc-navy-800);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-align: center;
+  margin: 0;
+  line-height: 1.35;
+}
+.gtc-region__tag {
+  display: block;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  font-size: var(--fs-xs);
+}
+
+/* ---------- INFO CARDS ---------- */
+.gtc-info {
+  padding: clamp(3rem, 6vw, 5rem) 0 clamp(4rem, 7vw, 6rem);
+  background: var(--color-bg-alt);
+  text-align: center;
+}
+
+.gtc-info__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  max-width: 1080px;
+  margin: 0 auto;
+}
+@media (min-width: 720px) {
+  .gtc-info__grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.gtc-info-card {
+  background: var(--gtc-white);
+  border-radius: var(--radius-lg);
+  padding: clamp(1.75rem, 3vw, 2.25rem) 1.5rem;
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  transition: transform var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease);
+}
+.gtc-info-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.gtc-info-card__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to right, #FEA616, #FE863F);
+  color: var(--gtc-white);
+  margin-bottom: var(--space-2);
+  box-shadow: 0 8px 18px rgba(22,164,214,0.28);
+}
+
+.gtc-info-card__title {
+  color: var(--gtc-navy-800);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  margin: 0;
+}
+
+.gtc-info-card__text {
+  color: var(--color-text);
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  margin: 0;
+  text-decoration: none;
+}
+a.gtc-info-card__text:hover { color: var(--color-accent); }
+
+.gtc-info-card__emails {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.gtc-info-card__email {
+  color: var(--color-text);
+  font-size: var(--fs-md);
+  text-decoration: none;
+  word-break: break-all;
+}
+.gtc-info-card__email:hover { color: var(--color-accent); }
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .gtc-contact__cta,
+  .gtc-region,
+  .gtc-info-card { transition: none; }
+}
