@@ -219,7 +219,15 @@ class TextAgentSession:
                 None, self._chat.send_message, parts
             )
 
-        reply = response.text or "(procesando... preguntame de nuevo)"
+        reply = response.text
+        if not reply:
+            # Gemini procesó tools pero no generó texto — pedirle que responda
+            retry = await loop.run_in_executor(
+                None,
+                self._chat.send_message,
+                "Respóndele al usuario con un mensaje de texto resumiendo lo que hiciste.",
+            )
+            reply = retry.text or "Listo, quedó registrado. ¿En qué más te puedo ayudar?"
 
         return {
             "reply": reply,

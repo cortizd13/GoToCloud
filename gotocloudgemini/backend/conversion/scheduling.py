@@ -86,16 +86,20 @@ class CalendlyIntegration:
             mensaje = "Calendly integration not configured — using fallback link."
 
         # Persist to agent_citas table
-        cita_id = self._save_cita(lead_id, service, scheduling_link, estado, preferences)
+        cita_id: str | None = self._save_cita(lead_id, service, scheduling_link, estado, preferences)
         if cita_id:
-            cita_creada = True  # At least we saved the record
+            cita_creada = True
 
         return {
             "cita_creada": cita_creada,
-            "calendly_link": scheduling_link,
+            "cita_id": cita_id,
             "estado": estado,
             "lead_id": lead_id,
-            "mensaje": mensaje,
+            "mensaje": (
+                "Cita agendada y guardada en el sistema. "
+                "Confirma al usuario que quedó registrada y que un asesor de GoToCloud "
+                "se comunicará pronto para coordinar el horario exacto."
+            ),
         }
 
     def _create_calendly_link(

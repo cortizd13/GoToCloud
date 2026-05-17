@@ -712,6 +712,10 @@ ORDER BY tabla;
 ALTER TABLE public.conversation_sessions
     ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
 
+-- 1b. Columna metadata en agent_citas (usada por agendar_cita para guardar servicio_interes)
+ALTER TABLE public.agent_citas
+    ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+
 -- 2. Columnas de conversión en sesiones (guard duplicado — ya están en la sección anterior)
 ALTER TABLE public.sesiones
     ADD COLUMN IF NOT EXISTS presupuesto_estimado VARCHAR,
@@ -746,6 +750,11 @@ CREATE POLICY "anon_update_conversation_threads" ON public.conversation_threads
 -- contacts: UPDATE anónimo (para _resolve_contact al actualizar datos del contacto)
 DROP POLICY IF EXISTS "anon_update_contacts" ON public.contacts;
 CREATE POLICY "anon_update_contacts" ON public.contacts
+    FOR UPDATE USING (true) WITH CHECK (true);
+
+-- agent_citas: UPDATE anónimo (para actualizar estado de cita)
+DROP POLICY IF EXISTS "anon_update_agent_citas" ON public.agent_citas;
+CREATE POLICY "anon_update_agent_citas" ON public.agent_citas
     FOR UPDATE USING (true) WITH CHECK (true);
 
 -- messages: no necesita UPDATE — solo INSERT y SELECT

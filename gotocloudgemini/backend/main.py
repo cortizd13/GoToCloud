@@ -328,6 +328,17 @@ async def dashboard_summary():
         today_start,
         today_end,
     )
+    citas_today = _safe_query(
+        "agent_citas",
+        "id,lead_id,fecha_hora,estado,metadata,created_at",
+        "created_at",
+        today_start,
+        today_end,
+    )
+    citas_all = _safe_query(
+        "agent_citas",
+        "id,lead_id,fecha_hora,estado,metadata,created_at",
+    )
 
     total_today = len(sessions_today) + len(calls_today)
     total_yesterday = len(sessions_yesterday) + len(calls_yesterday)
@@ -511,11 +522,28 @@ async def dashboard_summary():
             avg_score,
             total_today,
         ),
+        "citas": [
+            {
+                "id": c.get("id"),
+                "leadId": c.get("lead_id"),
+                "fechaHora": c.get("fecha_hora"),
+                "estado": c.get("estado") or "pendiente",
+                "servicio": (c.get("metadata") or {}).get("servicio_interes") or "",
+                "createdAt": c.get("created_at"),
+            }
+            for c in sorted(
+                citas_all,
+                key=lambda x: x.get("fecha_hora") or "",
+                reverse=False,
+            )
+        ],
+        "citasHoy": len(citas_today),
         "source": {
             "sessions": len(sessions_today),
             "calls": len(calls_today),
             "messages": len(messages_today),
             "events": len(events_today),
+            "citas": len(citas_today),
         },
     }
 
