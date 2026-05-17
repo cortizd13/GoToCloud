@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MdClose, MdOutlineSmartToy, MdSend } from "react-icons/md";
+import { MdClose, MdSend } from "react-icons/md";
 import { sendChatbotMessage } from "../../infrastructure/api/chatbot.api";
 import "./ChatbotWidget.css";
 

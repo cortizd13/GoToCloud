@@ -37,8 +37,11 @@ export default function VoiceCallWidget({ onClose }: Props) {
   }, [transcript, status]);
 
   useEffect(() => {
+    let active = true;
+
     const session = new VoiceSession({
       onEvent: (ev: VoiceEvent) => {
+        if (!active) return;
         if (ev.type === 'status') {
           if (ev.value === 'connected' || ev.value === 'listening') {
             setStatus('listening');
@@ -48,13 +51,21 @@ export default function VoiceCallWidget({ onClose }: Props) {
             setStatus('ended');
           }
         } else if (ev.type === 'transcript') {
-          setTranscript((prev) => [...prev, makeEntry(ev.role, ev.text)]);
+          // Streaming: append to last bubble if same role, else create new one
+          setTranscript((prev) => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === ev.role) {
+              return [...prev.slice(0, -1), { ...last, text: last.text + ev.text }];
+            }
+            return [...prev, makeEntry(ev.role, ev.text)];
+          });
         } else if (ev.type === 'error') {
           setErrorMsg(ev.message);
           setStatus('error');
         }
       },
       onClose: () => {
+        if (!active) return;
         setStatus((prev) => (prev === 'error' ? prev : 'ended'));
       },
     });
@@ -62,6 +73,7 @@ export default function VoiceCallWidget({ onClose }: Props) {
     sessionRef.current = session;
 
     session.startCapture().catch((err: unknown) => {
+      if (!active) return;
       const isPermissionDenied =
         err instanceof DOMException && err.name === 'NotAllowedError';
       setErrorMsg(
@@ -73,6 +85,7 @@ export default function VoiceCallWidget({ onClose }: Props) {
     });
 
     return () => {
+      active = false;
       session.hangUp();
     };
   }, []);
