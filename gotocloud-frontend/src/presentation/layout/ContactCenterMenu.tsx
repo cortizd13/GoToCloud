@@ -1,5 +1,5 @@
 import { getWhatsAppUrl } from "../../application/whatsapp";
-import { MailIcon, PhoneIcon, SocialIcon } from "../../shared/ui/icons";
+import { PhoneIcon, SocialIcon ,ChatBotIcon} from "../../shared/ui/icons";
 import "./ContactCenterButton.css";
 
 type ContactCenterMenuProps = {
@@ -56,8 +56,8 @@ function ContactCenterMenu({ id, onOpenChat, onOpenCall, onSelect }: ContactCent
           onSelect();
         }}
       >
-        <span className="contact-center-menu__label">Correo</span>
-        <MailIcon size={24} />
+        <span className="contact-center-menu__label">ChatBot</span>
+        <ChatBotIcon size={30} />
       </button>
     </div>
   );

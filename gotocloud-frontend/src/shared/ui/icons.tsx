@@ -91,6 +91,14 @@ export function ArrowRightIcon({ size = 16, ...rest }: IconProps) {
   );
 }
 
+export function ChatBotIcon({ size = 24 , ...rest }: IconProps) {
+  return (
+    <svg {...base(size)} {...rest}>
+        <path d="M12 2a1 1 0 0 1 1 1v1.06A6 6 0 0 1 18 10v1h1a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v1a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-1H5a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h1v-1a6 6 0 0 1 5-5.94V3a1 1 0 0 1 1-1zm-4 9v8h8v-8a4 4 0 0 0-8 0zm-3 2v3h1v-3H5zm14 0h-1v3h1v-3zM9.5 13a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5zm5 0a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5zM9 17h6v1H9v-1z" />
+    </svg>
+  );
+}
+
 export const SocialIcon = ({ icon, ...rest }: { icon: "linkedin" | "whatsapp" | "youtube" } & IconProps) => {
   switch (icon) {
     case "linkedin": return <LinkedInIcon {...rest} />;

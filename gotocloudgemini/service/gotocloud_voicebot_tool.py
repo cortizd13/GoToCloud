@@ -362,6 +362,29 @@ GOTOCLOUD_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "buscar_cliente",
+        "description": (
+            "Busca un cliente existente en la base de datos por nombre o cédula. "
+            "Úsala cuando el usuario se identifique (diga su nombre o cédula) para saber "
+            "si ya está registrado en el sistema — ya sea por llamada, chat u otro canal. "
+            "Si lo encuentra, retorna sus datos para no pedírselos de nuevo. "
+            "Si no lo encuentra, retorna encontrado=false."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "nombre": {
+                    "type": "string",
+                    "description": "Nombre o parte del nombre del cliente a buscar.",
+                },
+                "cedula": {
+                    "type": "string",
+                    "description": "Cédula exacta del cliente (búsqueda precisa).",
+                },
+            },
+        },
+    },
+    {
         "name": "obtener_informacion_empresa",
         "description": (
             "Retorna información general sobre GoToCloud: qué es, dónde opera, su propuesta "
@@ -588,6 +611,50 @@ def ejecutar_tool(nombre: str, args: dict[str, Any] | None = None) -> dict[str, 
             response["cliente_id"] = cliente_id
         return response
 
+    elif nombre == "buscar_cliente":
+        cedula_buscar = args.get("cedula", "").strip()
+        nombre_buscar = args.get("nombre", "").strip()
+
+        if not supabase:
+            return {"encontrado": False, "mensaje": "Base de datos no disponible"}
+
+        try:
+            if cedula_buscar:
+                resultado = supabase.table("clientes") \
+                    .select("id,nombre,cedula,empresa,telefono") \
+                    .eq("cedula", cedula_buscar) \
+                    .execute()
+            elif nombre_buscar:
+                resultado = supabase.table("clientes") \
+                    .select("id,nombre,cedula,empresa,telefono") \
+                    .ilike("nombre", f"%{nombre_buscar}%") \
+                    .limit(1) \
+                    .execute()
+            else:
+                return {"encontrado": False, "mensaje": "Proporciona nombre o cédula para buscar"}
+
+            if resultado.data and len(resultado.data) > 0:
+                cliente = resultado.data[0]
+                _cliente_actual.update({
+                    "cliente_id": cliente.get("id"),
+                    "nombre": cliente.get("nombre", ""),
+                    "cedula": cliente.get("cedula", ""),
+                    "empresa": cliente.get("empresa", ""),
+                    "telefono": cliente.get("telefono", ""),
+                })
+                return {
+                    "encontrado": True,
+                    "cliente_id": cliente.get("id"),
+                    "nombre": cliente.get("nombre", ""),
+                    "cedula": cliente.get("cedula", ""),
+                    "empresa": cliente.get("empresa", ""),
+                    "telefono": cliente.get("telefono", ""),
+                    "mensaje": f"Cliente encontrado: {cliente.get('nombre')}",
+                }
+            return {"encontrado": False, "mensaje": "Cliente no encontrado en el sistema"}
+        except Exception as ex:
+            return {"encontrado": False, "mensaje": f"Error en búsqueda: {ex}"}
+
     elif nombre == "obtener_informacion_empresa":
         e = GOTOCLOUD_KB["empresa"]
         return {
@@ -806,9 +873,14 @@ Lo primero que debes hacer SIEMPRE, antes de cualquier otra cosa, es:
 4. Pedir el número de cédula.
 5. Pedir el nombre de la empresa u organización donde trabaja.
 6. Pedir un número de teléfono de contacto.
-7. Llamar la tool `registrar_datos_cliente` con todos esos datos.
+7. Llamar la tool `registrar_datos_cliente` con los CUATRO datos: nombre, cédula, empresa y teléfono. NO llames la tool si te falta alguno de los cuatro.
 8. Revisar la respuesta: si `ya_registrado` es `true`, saluda al cliente como ya conocido ("Qué bueno tenerte de vuelta, [nombre]") y confirma si sus datos siguen igual.
 9. Luego preguntar en qué puedes ayudar.
+
+## DATOS YA RECOPILADOS — NO REPETIR
+- Una vez que el cliente haya dado un dato (nombre, cédula, empresa, teléfono), NO lo pidas de nuevo en esa llamada.
+- Si el cliente ya dio su teléfono y luego quiere agendar o comprar algo, NO le pidas el teléfono otra vez — ya lo tienes.
+- Si el cliente ya dio su empresa, no la preguntes de nuevo.
 
 ## CÓMO USAR LAS TOOLS
 - Usa SIEMPRE las tools para dar información. No inventes datos.
@@ -820,6 +892,9 @@ Lo primero que debes hacer SIEMPRE, antes de cualquier otra cosa, es:
 - **OASIS AI**: automatización de documentos con IA — 40% menos tiempo, 25-30% menos costos
 - **DataLoom**: orquestación de datos empresariales
 - **Servicios Administrados**: gestión 24/7 de Azure con ITIL, WAF, FinOps
+
+## SEGURIDAD — DATOS SENSIBLES (REGLA ABSOLUTA)
+NUNCA repitas en voz números de cédula, números de teléfono completos ni ningún identificador personal sensible. Úsalos solo internamente para llamar tools. Si el cliente pregunta qué datos tienes, confirma su nombre y empresa, nada más.
 
 ## TONO Y ESTILO DE VOZ
 - Habla como en una llamada telefónica real: frases cortas, naturales, sin listas ni bullets.

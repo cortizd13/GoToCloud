@@ -1,8 +1,11 @@
+import logging
 import os
 from typing import AsyncIterator, Callable, Any
 
 from google import genai
 from google.genai import types
+
+logger = logging.getLogger(__name__)
 
 
 MODEL = os.getenv("GEMINI_LIVE_MODEL", "models/gemini-3.1-flash-live-preview")
@@ -28,6 +31,7 @@ class GeminiLiveClient:
         self.session = None
         self._ctx = None
         self._tool_handler: Callable[[str, dict], Any] | None = None
+        self._transcript_callback: Callable[[str, str], Any] | None = None
 
     async def connect(
         self,
@@ -35,8 +39,10 @@ class GeminiLiveClient:
         tool_handler: Callable[[str, dict], Any] | None = None,
         system_instruction: str | None = None,
         voice_name: str = "Zephyr",
+        transcript_callback: Callable[[str, str], Any] | None = None,
     ):
         self._tool_handler = tool_handler
+        self._transcript_callback = transcript_callback
 
         gemini_tools = None
         if tools:
@@ -45,6 +51,11 @@ class GeminiLiveClient:
 
         config = types.LiveConnectConfig(
             response_modalities=["AUDIO"],
+            input_audio_transcription=types.AudioTranscriptionConfig(),
+            output_audio_transcription=types.AudioTranscriptionConfig(),
+            realtime_input_config=types.RealtimeInputConfig(
+                turn_coverage="TURN_INCLUDES_ONLY_ACTIVITY"
+            ),
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
@@ -81,7 +92,7 @@ class GeminiLiveClient:
 
     async def receive_audio(self) -> AsyncIterator[bytes]:
         """
-        Devuelve chunks PCM16 24kHz. Maneja tool_calls internamente.
+        Devuelve chunks PCM16 24kHz. Maneja tool_calls y transcripts internamente.
         Se detiene en turn_complete — llama en loop para multi-turno.
         """
         if not self.session:
@@ -105,6 +116,19 @@ class GeminiLiveClient:
                     input=types.LiveClientToolResponse(function_responses=responses)
                 )
                 continue  # no yield, esperar respuesta de audio
+
+            # ── Transcripts (streaming — cada chunk se envía inmediatamente) ──
+            if self._transcript_callback and response.server_content:
+                sc = response.server_content
+                if getattr(sc, "input_transcription", None):
+                    chunk = getattr(sc.input_transcription, "text", None)
+                    if chunk:
+                        await self._transcript_callback("user", chunk)
+                if getattr(sc, "output_transcription", None):
+                    chunk = getattr(sc.output_transcription, "text", None)
+                    if chunk:
+                        logger.debug(f"[transcript] output chunk: {chunk!r}")
+                        await self._transcript_callback("model", chunk)
 
             # ── Audio de respuesta ────────────────────────────────────
             if data := response.data:
