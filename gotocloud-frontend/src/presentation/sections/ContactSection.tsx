@@ -21,7 +21,7 @@ export function ContactSection() {
             juntos en su proyecto de transformación digital y alcanzar el éxito.
           </p>
           <p className="gtc-contact__cta-label">Contáctenos:</p>
-          <a className="gtc-contact__cta" href={`mailto:${vm.hero.email}`}>
+          <a className="gtc-contact__cta" >
             <MailIcon size={18} />
             <span>{vm.hero.email}</span>
           </a>
