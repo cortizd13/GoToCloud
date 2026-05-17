@@ -46,6 +46,13 @@
   flex: 0 0 auto;
   color: var(--gtc-navy-900);
   background: linear-gradient(135deg, var(--gtc-cyan-300), #fea616);
+  
+}
+
+.chatbot-widget__img{
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
 }
 
 .chatbot-widget__agent strong,
