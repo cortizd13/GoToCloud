@@ -83,6 +83,10 @@ async def startup():
     await event_bus.start()
     await orchestrator.start()
     logger.info("Multi-channel infrastructure started")
+    if GOTOCLOUD_TOOLS:
+        logger.info(f"[TOOLS] Cargados {len(GOTOCLOUD_TOOLS)} tools de GoToCloud")
+    else:
+        logger.warning("[TOOLS] Sin tools — Camila correrá sin funciones de registro")
 
 
 @app.on_event("shutdown")
