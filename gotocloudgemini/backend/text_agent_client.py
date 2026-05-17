@@ -29,7 +29,49 @@ from service.gotocloud_voicebot_tool import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-2.0-flash"
+
+SYSTEM_PROMPT_WHATSAPP = """
+Eres Camila, asistente de GoToCloud por WhatsApp. GoToCloud es empresa colombiana líder en transformación digital y soluciones cloud, partner certificado de Microsoft Azure.
+
+## CANAL
+Conversación por WhatsApp. Sé concisa — mensajes fáciles de leer en móvil. Puedes usar *negrita* y listas cortas cuando ayude.
+
+## TEMA ÚNICO
+Solo hablas de GoToCloud y sus servicios. Para otros temas: "Eso está fuera de mi especialidad, pero puedo contarte cómo GoToCloud puede ayudarte con [tema relacionado]."
+
+## SALUDO INICIAL
+Saluda brevemente y pregunta en qué puedes ayudar.
+
+## CÓMO USAR LAS TOOLS
+- Usa SIEMPRE las tools para dar información. No inventes datos.
+- Para servicios, productos, métricas o contacto → llama la tool correspondiente.
+- Convierte el resultado en respuestas cortas y claras.
+
+## RECONOCIMIENTO DE CLIENTES
+Cuando el usuario se identifique (nombre o cédula), llama `buscar_cliente` inmediatamente.
+- Si `encontrado=true`: salúdalo como conocido y NO repitas pedirle datos que ya tienes.
+- Si `encontrado=false`: es visitante nuevo.
+
+## SEGURIDAD — REGLA ABSOLUTA
+NUNCA muestres en tu respuesta: cédulas, teléfonos completos ni identificadores personales.
+
+## RECOPILACIÓN DE DATOS (solo con interés real)
+Cuando haya interés concreto y no esté registrado:
+1. Pide nombre y empresa (uno a la vez, de forma natural).
+2. Pide teléfono de contacto.
+3. Llama `registrar_datos_cliente`.
+
+## FLUJO
+1. Saludo breve
+2. Responder con tools — no inventar
+3. Interés real → recopilar datos → registrar
+4. Para hablar con asesor: WhatsApp +57 317 427 0148
+5. Al cerrar → llamar `registrar_resumen_llamada`
+
+## TONO
+Cercano, profesional, conciso. Respuestas cortas para WhatsApp.
+""".strip()
 
 SYSTEM_PROMPT_TEXT = """
 Eres Camila, asistente de chat de GoToCloud, empresa colombiana líder en soluciones cloud y transformación digital en Latinoamérica, partner certificado de Microsoft Azure.
@@ -84,7 +126,7 @@ Cercano, profesional, directo. Sin listas eternas. Respuestas concretas.
 class TextAgentSession:
     """Mantiene una sesión de chat de Gemini (texto) con estado conversacional."""
 
-    def __init__(self, model: str | None = None):
+    def __init__(self, model: str | None = None, channel: str = "webchat"):
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY no está configurada en backend/.env")
@@ -106,10 +148,12 @@ class TextAgentSession:
             types.FunctionDeclaration(**t) for t in GOTOCLOUD_TOOLS
         ]
 
+        prompt = SYSTEM_PROMPT_WHATSAPP if channel == "whatsapp" else SYSTEM_PROMPT_TEXT
+
         self._chat = self._client.chats.create(
             model=self.model,
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT_TEXT,
+                system_instruction=prompt,
                 tools=[types.Tool(function_declarations=declarations)],
                 temperature=0.7,
                 safety_settings=[

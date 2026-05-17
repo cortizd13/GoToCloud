@@ -53,13 +53,13 @@ async def handle_whatsapp_message(from_number: str, body: str) -> str:
 
     session = _whatsapp_sessions.get(from_number)
     if session is None or getattr(session, "ended", False):
-        session = TextAgentSession()
+        session = TextAgentSession(channel="whatsapp")
         _whatsapp_sessions[from_number] = session
         # Persistencia en DB (lazy import para evitar circular)
         try:
             from .main import _ensure_chat_session_db
 
-            await _ensure_chat_session_db(session)
+            await _ensure_chat_session_db(session, channel_type="whatsapp")
         except Exception as exc:
             logger.warning(f"WhatsApp DB session creation failed: {exc}")
 
