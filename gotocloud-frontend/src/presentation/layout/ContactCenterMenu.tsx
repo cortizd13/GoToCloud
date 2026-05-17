@@ -1,51 +1,49 @@
 import { getWhatsAppUrl } from "../../application/whatsapp";
-import { CONTACT_INFO } from "../../infrastructure/data/contact.data";
 import { MailIcon, PhoneIcon, SocialIcon } from "../../shared/ui/icons";
 import "./ContactCenterButton.css";
 
 type ContactCenterMenuProps = {
   id: string;
   onOpenChat: () => void;
+  onOpenCall: () => void;
   onSelect: () => void;
 };
 
-const contactActions = [
-  {
-    label: "WhatsApp",
-    href: getWhatsAppUrl({
-      intent: "Contactar al equipo comercial de GoToCloud",
-      detail: "Quiero recibir asesoría sobre soluciones cloud.",
-      source: "gotocloud.com.co",
-    }),
-    icon: <SocialIcon icon="whatsapp" size={24} />,
-    external: true,
-  },
-  {
-    label: "Llamar",
-    href: CONTACT_INFO.phoneHref,
-    icon: <PhoneIcon size={24} />,
-  },
-];
-
-function ContactCenterMenu({ id, onOpenChat, onSelect }: ContactCenterMenuProps) {
+function ContactCenterMenu({ id, onOpenChat, onOpenCall, onSelect }: ContactCenterMenuProps) {
   return (
     <div className="contact-center-menu" id={id} role="menu" aria-label="Opciones de contacto">
-      {contactActions.map((action) => (
-        <a
-          key={action.label}
-          className="contact-center-menu__item"
-          href={action.href}
-          target={action.external ? "_blank" : undefined}
-          rel={action.external ? "noopener noreferrer" : undefined}
-          aria-label={action.label}
-          title={action.label}
-          role="menuitem"
-          onClick={onSelect}
-        >
-          <span className="contact-center-menu__label">{action.label}</span>
-          {action.icon}
-        </a>
-      ))}
+      <a
+        className="contact-center-menu__item"
+        href={getWhatsAppUrl({
+          intent: "Contactar al equipo comercial de GoToCloud",
+          detail: "Quiero recibir asesoría sobre soluciones cloud.",
+          source: "gotocloud.com.co",
+        })}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="WhatsApp"
+        title="WhatsApp"
+        role="menuitem"
+        onClick={onSelect}
+      >
+        <span className="contact-center-menu__label">WhatsApp</span>
+        <SocialIcon icon="whatsapp" size={24} />
+      </a>
+
+      <button
+        type="button"
+        className="contact-center-menu__item"
+        aria-label="Llamar a Camila"
+        title="Llamar"
+        role="menuitem"
+        onClick={() => {
+          onOpenCall();
+          onSelect();
+        }}
+      >
+        <span className="contact-center-menu__label">Llamar</span>
+        <PhoneIcon size={24} />
+      </button>
 
       <button
         type="button"
