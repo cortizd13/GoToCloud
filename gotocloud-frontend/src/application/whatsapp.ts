@@ -1,4 +1,4 @@
-export const WHATSAPP_NUMBER = "573226787358";
+export const WHATSAPP_NUMBER = "573174270148";
 
 type WhatsAppMessageInput = {
   intent: string;
