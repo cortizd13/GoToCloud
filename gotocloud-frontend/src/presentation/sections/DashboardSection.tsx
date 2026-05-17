@@ -3,6 +3,7 @@ import { FiAlertCircle, FiDatabase, FiDownload, FiRefreshCw } from "react-icons/
 import type {
   DashboardBreakdownItem,
   DashboardHourlyPoint,
+  DashboardLead,
   DashboardSummary,
 } from "../../domain/dashboard";
 import { getDashboardSummary } from "../../infrastructure/api/dashboard.api";
@@ -54,6 +55,8 @@ const emptySummary: DashboardSummary = {
   })),
   contactReasons: [],
   channels: [],
+  hotLeads: [],
+  escalationCandidates: [],
   recommendations: [],
   source: {
     sessions: 0,
@@ -114,6 +117,85 @@ function BreakdownList({
             <span style={{ width: `${Math.min(100, item.percentage)}%` }} />
           </div>
           <small>{item.percentage}%</small>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function waLink(telefono: string): string {
+  const digits = telefono.replace(/\D/g, "");
+  const normalized = digits.startsWith("57") ? digits : `57${digits}`;
+  return `https://wa.me/${normalized}`;
+}
+
+function LeadList({
+  leads,
+  showRec,
+}: {
+  leads: DashboardLead[];
+  showRec: boolean;
+}) {
+  if (!leads.length) {
+    return (
+      <p className="dashboard-empty">
+        {showRec
+          ? "Sin candidatos a escalado registrados."
+          : "Sin leads calientes registrados."}
+      </p>
+    );
+  }
+
+  return (
+    <ul className="dashboard-leads">
+      {leads.map((lead) => (
+        <li className="dashboard-lead" key={lead.id}>
+          <div className="dashboard-lead__info">
+            <strong>{lead.nombre}</strong>
+            {lead.empresa && <span>{lead.empresa}</span>}
+            {!showRec && lead.serviciosInteres.length > 0 && (
+              <div className="dashboard-lead__services">
+                {lead.serviciosInteres.map((s) => (
+                  <span className="dashboard-lead__service-tag" key={s}>
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
+            {showRec && lead.recomendaciones && (
+              <p className="dashboard-lead__rec">{lead.recomendaciones}</p>
+            )}
+          </div>
+          <div className="dashboard-lead__meta">
+            {lead.scoreLead > 0 && (
+              <span
+                className={`dashboard-score dashboard-score--${
+                  lead.scoreLead >= 80
+                    ? "high"
+                    : lead.scoreLead >= 50
+                      ? "mid"
+                      : "low"
+                }`}
+              >
+                {lead.scoreLead}
+              </span>
+            )}
+            <span
+              className={`dashboard-intention dashboard-intention--${lead.intention}`}
+            >
+              {lead.intention}
+            </span>
+          </div>
+          {lead.telefono && (
+            <a
+              className="dashboard-lead__wa"
+              href={waLink(lead.telefono)}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              WhatsApp
+            </a>
+          )}
         </li>
       ))}
     </ul>
@@ -187,7 +269,8 @@ export function DashboardSection() {
           <a href="/dashboard#conversaciones">Conversaciones</a>
           <a href="/dashboard#canales">Canales</a>
           <a href="/dashboard#agente">Agente IA</a>
-          <a href="/dashboard#reportes">Reportes</a>
+          <a href="/dashboard#leads">Leads</a>
+          <a href="/dashboard#escalado">Escalado</a>
         </nav>
         <div className="dashboard-sidebar__status">
           <FiDatabase aria-hidden="true" />
@@ -345,6 +428,36 @@ export function DashboardSection() {
                 </li>
               ))}
             </ol>
+          </article>
+
+          <article className="dashboard-panel dashboard-panel--full" id="leads">
+            <div className="dashboard-panel__header">
+              <div>
+                <h2>Leads calientes</h2>
+                <p>Score ≥ 70 o intención caliente · seguimiento prioritario</p>
+              </div>
+              {summary.hotLeads.length > 0 && (
+                <span className="dashboard-badge dashboard-badge--hot">
+                  {summary.hotLeads.length}
+                </span>
+              )}
+            </div>
+            <LeadList leads={summary.hotLeads} showRec={false} />
+          </article>
+
+          <article className="dashboard-panel dashboard-panel--full" id="escalado">
+            <div className="dashboard-panel__header">
+              <div>
+                <h2>Candidatos a escalado humano</h2>
+                <p>El agente IA dejó recomendaciones de seguimiento</p>
+              </div>
+              {summary.escalationCandidates.length > 0 && (
+                <span className="dashboard-badge dashboard-badge--escalation">
+                  {summary.escalationCandidates.length}
+                </span>
+              )}
+            </div>
+            <LeadList leads={summary.escalationCandidates} showRec={true} />
           </article>
         </section>
       </section>

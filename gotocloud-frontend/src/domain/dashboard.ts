@@ -39,11 +39,25 @@ export type DashboardSourceSummary = {
   events: number;
 };
 
+export type DashboardLead = {
+  id: number;
+  nombre: string;
+  empresa: string;
+  telefono: string;
+  scoreLead: number;
+  intention: "fria" | "calida" | "caliente";
+  serviciosInteres: string[];
+  recomendaciones: string;
+  startedAt: string;
+};
+
 export type DashboardSummary = {
   generatedAt: string;
   range: "today";
   overview: DashboardOverviewMetric[];
   volumeByHour: DashboardHourlyPoint[];
+  hotLeads: DashboardLead[];
+  escalationCandidates: DashboardLead[];
   contactReasons: DashboardBreakdownItem[];
   channels: DashboardBreakdownItem[];
   recommendations: DashboardRecommendation[];

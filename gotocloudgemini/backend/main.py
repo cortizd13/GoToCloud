@@ -215,6 +215,21 @@ def _hour_label(hour: int) -> str:
     return f"{hour:02d}:00"
 
 
+def _format_lead(row: dict) -> dict:
+    cliente = row.get("clientes") or {}
+    return {
+        "id": row.get("id"),
+        "nombre": cliente.get("nombre") or "Desconocido",
+        "empresa": cliente.get("empresa") or "",
+        "telefono": cliente.get("telefono") or "",
+        "scoreLead": row.get("score_lead") or 0,
+        "intention": row.get("intention") or "fria",
+        "serviciosInteres": row.get("servicios_interes") or [],
+        "recomendaciones": row.get("recomendaciones") or "",
+        "startedAt": str(row.get("started_at") or ""),
+    }
+
+
 def _dashboard_recommendations(reason_counts: Counter, channel_counts: Counter,
                                avg_score: float | None, total_today: int) -> list[dict]:
     recommendations = []
@@ -436,11 +451,43 @@ async def dashboard_summary():
         },
     ]
 
+    # Hot leads and escalation candidates (all time, not just today)
+    leads_raw: list[dict] = []
+    try:
+        if supabase is not None:
+            result = (
+                supabase.table("llamadas")
+                .select(
+                    "id,score_lead,intention,servicios_interes,recomendaciones,started_at,"
+                    "clientes(nombre,empresa,telefono)"
+                )
+                .order("score_lead", desc=True)
+                .limit(60)
+                .execute()
+            )
+            leads_raw = result.data or []
+    except Exception as exc:
+        logger.warning("Hot leads query failed: %s", exc)
+
+    hot_leads = [
+        _format_lead(r)
+        for r in leads_raw
+        if (r.get("score_lead") or 0) >= 70 or r.get("intention") == "caliente"
+    ][:10]
+    hot_ids = {r.get("id") for r in leads_raw if (r.get("score_lead") or 0) >= 70 or r.get("intention") == "caliente"}
+    escalation_candidates = [
+        _format_lead(r)
+        for r in leads_raw
+        if r.get("recomendaciones") and r.get("id") not in hot_ids
+    ][:10]
+
     return {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "range": "today",
         "overview": overview,
         "volumeByHour": list(hourly.values()),
+        "hotLeads": hot_leads,
+        "escalationCandidates": escalation_candidates,
         "contactReasons": [
             {
                 "label": label,
