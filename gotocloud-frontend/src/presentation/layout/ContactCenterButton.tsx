@@ -4,10 +4,12 @@ import { CloseIcon } from "../../shared/ui/icons";
 import "./ContactCenterButton.css";
 import ChatbotWidget from "./ChatbotWidget";
 import ContactCenterMenu from "./ContactCenterMenu";
+import VoiceCallWidget from "./VoiceCallWidget";
 
 function ContactCenterButton() {
   const [open, setOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
   const menuId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -36,12 +38,19 @@ function ContactCenterButton() {
   return (
     <div className={`contact-center${open ? " is-open" : ""}`} ref={containerRef}>
       {chatOpen && <ChatbotWidget onClose={() => setChatOpen(false)} />}
+      {callOpen && <VoiceCallWidget onClose={() => setCallOpen(false)} />}
       {open && (
         <ContactCenterMenu
           id={menuId}
           onOpenChat={() => {
+            setCallOpen(false);
             setOpen(false);
             setChatOpen(true);
+          }}
+          onOpenCall={() => {
+            setChatOpen(false);
+            setOpen(false);
+            setCallOpen(true);
           }}
           onSelect={() => setOpen(false)}
         />
@@ -55,6 +64,7 @@ function ContactCenterButton() {
         aria-label={open ? "Cerrar centro de contacto" : "Abrir centro de contacto"}
         onClick={() => {
           setChatOpen(false);
+          setCallOpen(false);
           setOpen((isOpen) => !isOpen);
         }}
       >
