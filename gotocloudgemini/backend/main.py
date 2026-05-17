@@ -722,12 +722,16 @@ async def web_stream(websocket: WebSocket):
         await _ws_send_json(websocket, {"type": "tool", "name": nombre, "result": result})
         return result
 
+    async def transcript_cb(role: str, text: str) -> None:
+        await _ws_send_json(websocket, {"type": "transcript", "role": role, "text": text})
+
     try:
         await gemini.connect(
             tools=GOTOCLOUD_TOOLS,
             tool_handler=ejecutar_tool,
             system_instruction=SYSTEM_PROMPT,
             voice_name="Aoede",
+            transcript_callback=transcript_cb,
         )
     except Exception as exc:
         logger.error(f"[WEB] Error conectando Gemini: {exc}")
