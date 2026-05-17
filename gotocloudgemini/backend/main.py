@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent / ".env")
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
@@ -618,7 +618,7 @@ async def dashboard_client_sessions(client_id: int):
 
 
 @app.post("/chat/message")
-async def chat_message(request: dict):
+async def chat_message(request: dict, background_tasks: BackgroundTasks):
     """Endpoint de chat textual — usado por el frontend (ChatbotWidget)."""
     if not TEXT_AGENT_AVAILABLE:
         from fastapi.responses import JSONResponse
@@ -646,34 +646,28 @@ async def chat_message(request: dict):
         session = TextAgentSession(model=model)
         _sessions[session.session_id] = session
         session_id = session.session_id
-
-        # Create DB thread + session for persistence (REQ-5, REQ-7)
-        await _ensure_chat_session_db(session)
+        # Fire DB session creation concurrently — don't block Gemini on first message
+        asyncio.create_task(_ensure_chat_session_db(session))
 
     try:
-        # Persist user message before sending to Gemini (REQ-6)
-        if session.db_session_id:
-            await orchestrator.memory.add_message(
-                session.db_session_id,
-                "user",
-                message,
-            )
-
         result = await session.send_message(message)
 
-        # Persist agent response after Gemini replies (REQ-6)
-        if session.db_session_id and result.get("reply"):
-            await orchestrator.memory.add_message(
+        # Persist both messages in background — off the critical path
+        if session.db_session_id:
+            background_tasks.add_task(
+                _persist_messages_bg,
                 session.db_session_id,
-                "agent",
-                result["reply"],
-                metadata={"tool_calls": result.get("tool_calls", [])},
+                message,
+                result,
             )
 
         # Close session when conversation ends (REQ-7)
         if result.get("ended") or ended_flag:
             if session.db_session_id:
-                await orchestrator.session_manager.close_session(session.db_session_id)
+                background_tasks.add_task(
+                    orchestrator.session_manager.close_session,
+                    session.db_session_id,
+                )
 
     except Exception as exc:
         error_msg = str(exc)

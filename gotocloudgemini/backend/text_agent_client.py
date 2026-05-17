@@ -29,7 +29,7 @@ from service.gotocloud_voicebot_tool import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-2.0-flash"
 
 SYSTEM_PROMPT_TEXT = """
 Eres Camila, asistente de chat de GoToCloud, empresa colombiana líder en soluciones cloud y transformación digital en Latinoamérica, partner certificado de Microsoft Azure.

@@ -910,6 +910,8 @@ export function DashboardSection() {
                   <p>Score ≥ 70 o intención caliente · seguimiento prioritario</p>
                 </div>
                 {summary.hotLeads.length > 0 && (
+
+                  
                   <span className="dashboard-badge dashboard-badge--hot">
                     {summary.hotLeads.length}
                   </span>
