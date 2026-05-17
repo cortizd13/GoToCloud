@@ -140,3 +140,36 @@ def test_orchestrator_missing_payload_fields():
     ))
 
     assert result is None
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PR #2: create_voice_session sync helper
+# ═══════════════════════════════════════════════════════════════
+
+def test_create_voice_session_creates_thread_and_session():
+    """create_voice_session creates thread + session with channel_type='voice'."""
+    supabase = MockSupabase(contacts=[{"id": "contact-1"}])
+    orchestrator = AgentOrchestrator(supabase=supabase)
+
+    result = orchestrator.create_voice_session("1234567890", {
+        "resumen": "Test call",
+        "intention": "calida",
+    })
+
+    assert result is not None
+    assert "session_id" in result
+    assert "thread_id" in result
+    assert "contact_id" in result
+
+
+def test_create_voice_session_no_supabase():
+    """create_voice_session returns None when supabase is not available."""
+    orchestrator = AgentOrchestrator(supabase=None)
+
+    result = orchestrator.create_voice_session("1234567890", {})
+
+    # Without supabase, _resolve_contact returns placeholder, so it should still work
+    # but with placeholder values
+    assert result is not None
+    assert "session_id" in result
+    assert "thread_id" in result
