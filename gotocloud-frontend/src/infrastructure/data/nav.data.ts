@@ -31,7 +31,7 @@ export const PRIMARY_NAV: NavMenuItem[] = [
   { label: "Nosotros", href: "#nosotros" },
   { label: "Trabaja con nosotros", href: "#trabaja" },
   { label: "Blog", href: "#blog" },
-  { label: "Admin", href: "https://7r9fb398-5173.use.devtunnels.ms/dashboard", cta: true },
+  { label: "Admin", href: "https://gotocloud.vercel.app/dashboard", cta: true },
 ];
 
 export const SOCIAL_LINKS: SocialLink[] = [
